@@ -41,7 +41,7 @@
       <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
     </div>
 
-    <!-- Download button (hidden initially) -->
+    <!-- Download button -->
     <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
       <i class="fa-solid fa-file-zipper"></i> Download jCss.zip
     </a>
@@ -50,7 +50,8 @@
   </div>
 
   <script>
-    const PROXY = '/api/fetch-css';   // adjust if needed
+    // 👇 YOUR DEPLOYED PROXY URL
+    const PROXY = 'https://fetch-css.vercel.app/api/fetch-css';
 
     const urlInput = document.getElementById('urlInput');
     const fetchBtn = document.getElementById('fetchBtn');
@@ -66,14 +67,13 @@
       const url = urlInput.value.trim();
       if (!url) return;
 
-      // Reset UI
       errorMsg.classList.add('hidden');
       downloadBtn.classList.add('hidden');
       progressContainer.classList.remove('hidden');
       setProgress(0, 0, 0, 'Fetching CSS...');
 
       try {
-        // 1. Fetch the CSS text via proxy
+        // 1. Fetch CSS
         const cssResponse = await fetch(`${PROXY}?url=${encodeURIComponent(url)}`);
         if (!cssResponse.ok) {
           const err = await cssResponse.json().catch(() => ({}));
@@ -82,126 +82,81 @@
         const cssText = await cssResponse.text();
         const cssByteLength = new Blob([cssText]).size;
 
-        // 2. Parse CSS for url() references (exclude data: and absolute http(s)://)
+        // 2. Extract url() references (skip data: and absolute http(s)://)
         const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
         const rawMatches = [...cssText.matchAll(urlRegex)];
 
-        // Resolve relative URLs
-        const cssBaseUrl = url.substring(0, url.lastIndexOf('/') + 1); // e.g., ends with /
-        const resolvedUrls = new Map(); // absoluteUrl -> filename in images/
+        const cssBaseUrl = url.substring(0, url.lastIndexOf('/') + 1);
+        const resolvedUrls = new Map(); // absoluteUrl -> filename
 
         rawMatches.forEach(match => {
-          let relativePath = match[1].trim();
-          // Remove possible leading/trailing quotes
-          relativePath = relativePath.replace(/^["']|["']$/g, '');
-          // Skip if already absolute
-          if (relativePath.startsWith('http://') || relativePath.startsWith('https://') || relativePath.startsWith('//')) return;
+          let path = match[1].trim().replace(/^["']|["']$/g, '');
+          if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')) return;
           try {
-            const absoluteUrl = new URL(relativePath, cssBaseUrl).href;
+            const absoluteUrl = new URL(path, cssBaseUrl).href;
             if (!resolvedUrls.has(absoluteUrl)) {
-              // Create a unique filename inside images/
               let filename = absoluteUrl.substring(absoluteUrl.lastIndexOf('/') + 1);
-              // Remove query string from filename
               const qIndex = filename.indexOf('?');
               if (qIndex !== -1) filename = filename.substring(0, qIndex);
-              // Avoid empty filenames
               if (!filename) filename = 'asset';
-              // Add counter if duplicate filename
-              let uniqueName = filename;
+              let unique = filename;
               let counter = 1;
-              const existingNames = new Set(resolvedUrls.values());
-              while (existingNames.has(uniqueName)) {
-                const dotIndex = filename.lastIndexOf('.');
-                if (dotIndex !== -1) {
-                  uniqueName = filename.substring(0, dotIndex) + `_${counter}` + filename.substring(dotIndex);
-                } else {
-                  uniqueName = filename + `_${counter}`;
-                }
+              const usedNames = new Set(resolvedUrls.values());
+              while (usedNames.has(unique)) {
+                const dot = filename.lastIndexOf('.');
+                unique = dot !== -1
+                  ? filename.substring(0, dot) + `_${counter}` + filename.substring(dot)
+                  : filename + `_${counter}`;
                 counter++;
               }
-              resolvedUrls.set(absoluteUrl, uniqueName);
+              resolvedUrls.set(absoluteUrl, unique);
             }
-          } catch (e) {
-            // ignore malformed
-          }
+          } catch {}
         });
 
-        const assetEntries = Array.from(resolvedUrls.entries()); // [absoluteUrl, localFilename]
-
-        // 3. Calculate total download size if possible (using HEAD requests is optional, we skip for simplicity)
-        // We'll track progress as we download each asset.
-        const totalAssets = assetEntries.length;
+        const assetEntries = Array.from(resolvedUrls.entries());
         let downloadedBytes = cssByteLength;
-        const totalBytesUnknown = true; // we'll show cumulative bytes without percentage if unknown
-
-        // Update progress with CSS size
         setProgress(0, 0, downloadedBytes, `Fetched CSS (${formatBytes(cssByteLength)})`);
 
-        // 4. Download all assets via proxy, tracking progress
+        // 3. Build zip
         const zip = new JSZip();
-        // Add CSS file to zip root
         const cssFilename = url.substring(url.lastIndexOf('/') + 1) || 'style.css';
         zip.file(cssFilename, cssText);
-
         const imageFolder = zip.folder("images");
 
         for (let i = 0; i < assetEntries.length; i++) {
           const [assetUrl, localName] = assetEntries[i];
-          progressDetail.textContent = `Downloading asset ${i+1}/${totalAssets}: ${localName}`;
-
+          progressDetail.textContent = `Asset ${i+1}/${assetEntries.length}: ${localName}`;
           try {
             const assetResponse = await fetch(`${PROXY}?url=${encodeURIComponent(assetUrl)}`);
-            if (!assetResponse.ok) {
-              console.warn(`Failed to fetch ${assetUrl}`);
-              continue;
-            }
-
-            // Stream the asset while accumulating bytes
+            if (!assetResponse.ok) continue;
             const reader = assetResponse.body.getReader();
             const chunks = [];
-            let received = 0;
-            const contentLength = assetResponse.headers.get('content-length');
-            const assetTotal = contentLength ? parseInt(contentLength, 10) : null;
-
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
               chunks.push(value);
-              received += value.length;
               downloadedBytes += value.length;
-
-              // Update progress (we don't know overall total, so show just received bytes)
               setProgress(0, 0, downloadedBytes,
-                `Asset ${i+1}/${totalAssets}: ${localName} (${formatBytes(received)}${assetTotal ? ' / ' + formatBytes(assetTotal) : ''})`);
+                `Asset ${i+1}/${assetEntries.length}: ${localName}`);
             }
-
-            const blob = new Blob(chunks);
-            imageFolder.file(localName, blob);
-          } catch (e) {
-            console.warn(`Skipped ${assetUrl}: ${e.message}`);
-          }
+            imageFolder.file(localName, new Blob(chunks));
+          } catch (e) { console.warn(`Skipped ${assetUrl}: ${e.message}`); }
         }
 
-        // 5. Generate zip
+        // 4. Generate zip
         progressDetail.textContent = 'Building zip...';
-        setProgress(0, 0, downloadedBytes, 'Building zip...');
-        const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
-          // metadata.percent gives overall compression progress
-          setProgress(metadata.percent, 100, downloadedBytes,
-            `Compressing... ${metadata.percent.toFixed(0)}%`);
-        });
+        const zipBlob = await zip.generateAsync({ type: 'blob' }, meta =>
+          setProgress(meta.percent, 100, downloadedBytes, `Compressing... ${meta.percent.toFixed(0)}%`)
+        );
 
-        // 6. Enable download
         const blobUrl = URL.createObjectURL(zipBlob);
         downloadBtn.href = blobUrl;
         downloadBtn.download = 'jCss.zip';
         downloadBtn.classList.remove('hidden');
         progressDetail.textContent = 'Done! Click to download.';
         setProgress(100, 100, downloadedBytes, 'Complete');
-
-        downloadBtn.addEventListener('click', () => {
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-        }, { once: true });
+        downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
 
       } catch (err) {
         errorMsg.textContent = err.message;
@@ -210,12 +165,12 @@
       }
     });
 
-    function setProgress(value, max, absoluteBytes, detailText) {
-      const percent = max ? Math.round((value / max) * 100) : 0;
-      progressPercent.textContent = max ? `${percent}%` : '...';
-      progressSize.textContent = formatBytes(absoluteBytes);
-      progressBar.style.width = max ? `${percent}%` : '50%';
-      if (detailText) progressDetail.textContent = detailText;
+    function setProgress(value, max, bytes, text) {
+      const pct = max ? Math.round((value / max) * 100) : 0;
+      progressPercent.textContent = max ? `${pct}%` : '...';
+      progressSize.textContent = formatBytes(bytes);
+      progressBar.style.width = max ? `${pct}%` : '50%';
+      if (text) progressDetail.textContent = text;
     }
 
     function formatBytes(bytes) {
