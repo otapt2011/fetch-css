@@ -1,4 +1,4 @@
-// api/fetch-html.js
+// api/fetch-web.js
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
@@ -18,13 +18,15 @@ export default async function handler(req, res) {
   }
 
   const forceDynamic = req.query.dynamic === 'true';
-  const debug = req.query.debug === 'true';   // New debug flag
+  const debug = req.query.debug === 'true';   // returns final URL + canonical
 
   // 1. Static extraction (unless forced)
   if (!forceDynamic) {
     try {
       const response = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CssScraperBot/1.0)' }
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+        }
       });
       if (!response.ok) throw new Error(`Upstream error: ${response.statusText}`);
       const html = await response.text();
@@ -51,11 +53,13 @@ export default async function handler(req, res) {
         } catch {}
       });
 
-      // If we got results, return (with optional debug info)
       if (stylesheets.length > 0) {
         res.setHeader('Access-Control-Allow-Origin', '*');
         const payload = { url, stylesheets };
-        if (debug) payload.finalUrl = url;   // static mode saw this URL
+        if (debug) {
+          payload.finalUrl = url;
+          payload.canonical = $('link[rel="canonical"]').attr('href') || null;
+        }
         return res.status(200).json(payload);
       }
     } catch (e) {
@@ -63,34 +67,46 @@ export default async function handler(req, res) {
     }
   }
 
-  // 2. Dynamic headless browser
+  // 2. Dynamic headless browser (realistic simulation)
   let browser = null;
   try {
     browser = await puppeteer.launch({
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
+      defaultViewport: { width: 1920, height: 1080 },
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
+      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
+
+    // Set a realistic user agent and extra headers
+    await page.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+    );
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    });
+
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
 
-    // Grab the final URL the browser actually ended up at
-    const finalUrl = await page.evaluate(() => window.location.href);
-
-    const stylesheets = await page.evaluate(() => {
+    // Extract final URL, canonical, and stylesheets
+    const { finalUrl, canonical, stylesheets } = await page.evaluate(() => {
+      const final = window.location.href;
+      const canonEl = document.querySelector('link[rel="canonical"]');
+      const canon = canonEl ? canonEl.href : null;
       const links = Array.from(
         document.querySelectorAll('link[rel="stylesheet"], link[as="style"]')
       );
-      return links.map(link => link.href).filter(h => h);
+      const sheets = links.map(link => link.href).filter(h => h);
+      return { finalUrl: final, canonical: canon, stylesheets: sheets };
     });
 
     await browser.close();
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const payload = { url, finalUrl, stylesheets };
-    if (debug) payload.finalUrl = finalUrl;
+    const payload = { url, finalUrl, canonical, stylesheets };
     return res.status(200).json(payload);
   } catch (err) {
     if (browser) await browser.close();
