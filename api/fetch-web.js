@@ -1,10 +1,10 @@
-// api/fetch-web.js
+// api/fetch-html.js
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 
 export default async function handler(req, res) {
-  // CORS preflight
+  // CORS
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
@@ -18,8 +18,9 @@ export default async function handler(req, res) {
   }
 
   const forceDynamic = req.query.dynamic === 'true';
+  const debug = req.query.debug === 'true';   // New debug flag
 
-  // 1. Try static parsing first (fast) unless forced
+  // 1. Static extraction (unless forced)
   if (!forceDynamic) {
     try {
       const response = await fetch(url, {
@@ -50,17 +51,19 @@ export default async function handler(req, res) {
         } catch {}
       });
 
-      // If we got something, return it
+      // If we got results, return (with optional debug info)
       if (stylesheets.length > 0) {
         res.setHeader('Access-Control-Allow-Origin', '*');
-        return res.status(200).json(stylesheets);
+        const payload = { url, stylesheets };
+        if (debug) payload.finalUrl = url;   // static mode saw this URL
+        return res.status(200).json(payload);
       }
     } catch (e) {
       console.warn('Static parsing failed, falling back to headless browser:', e.message);
     }
   }
 
-  // 2. Dynamic headless browser (Puppeteer + @sparticuz/chromium)
+  // 2. Dynamic headless browser
   let browser = null;
   try {
     browser = await puppeteer.launch({
@@ -73,6 +76,9 @@ export default async function handler(req, res) {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
 
+    // Grab the final URL the browser actually ended up at
+    const finalUrl = await page.evaluate(() => window.location.href);
+
     const stylesheets = await page.evaluate(() => {
       const links = Array.from(
         document.querySelectorAll('link[rel="stylesheet"], link[as="style"]')
@@ -83,8 +89,9 @@ export default async function handler(req, res) {
     await browser.close();
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(200).json(stylesheets);
+    const payload = { url, finalUrl, stylesheets };
+    if (debug) payload.finalUrl = finalUrl;
+    return res.status(200).json(payload);
   } catch (err) {
     if (browser) await browser.close();
     return res.status(500).json({ error: `Failed to fetch page: ${err.message}` });
