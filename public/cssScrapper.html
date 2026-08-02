@@ -244,22 +244,21 @@
     // Common scraping handler
     async function handleScrape(input) {
   resetUI();
-  
-  let lastInfo = null;   // will hold the final progress info
+  let lastInfo = null;
 
   try {
     const blob = await CssScraper.scrape(input, {
       proxyUrl: 'https://fetch-css.vercel.app/api/fetch-css',
       onProgress: (info) => {
-        lastInfo = info;                         // save latest info
-        setProgress(
-          info.filePercent,
-          info.detail,
-          info.cssIndex,
-          info.cssTotal,
-          info.overallBytes,
-          info.currentFile
-        );
+        lastInfo = info;
+        // ---- bar = overall progress ----
+        progressBar.style.width = `${info.overallPercent}%`;
+        // ---- label = current file progress ----
+        currentPercent.textContent = `${Math.round(info.filePercent)}%`;
+        if (info.detail) progressDetail.textContent = info.detail;
+        overallCount.textContent = `CSS ${info.cssIndex}/${info.cssTotal}`;
+        overallSize.textContent = formatBytes(info.overallBytes);
+        if (info.currentFile) currentFile.textContent = info.currentFile;
       }
     });
 
@@ -267,16 +266,15 @@
     downloadBtn.href = blobUrl;
     downloadBtn.download = 'jCss.zip';
     downloadBtn.classList.remove('hidden');
-    
-    // use the last info we received (the final one)
     const cssTotal = lastInfo ? lastInfo.cssTotal : 1;
     const bytes = lastInfo ? lastInfo.overallBytes : 0;
-    setProgress(100, 'Complete! Click download.', cssTotal, cssTotal, bytes, '');
-    
-    downloadBtn.addEventListener('click', () => {
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-    }, { once: true });
-    
+    progressBar.style.width = '100%';
+    currentPercent.textContent = '100%';
+    overallCount.textContent = `CSS ${cssTotal}/${cssTotal}`;
+    overallSize.textContent = formatBytes(bytes);
+    progressDetail.textContent = 'Complete! Click download.';
+    currentFile.textContent = '—';
+    downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
   } catch (err) {
     errorMsg.textContent = err.message;
     errorMsg.classList.remove('hidden');
