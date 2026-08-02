@@ -1,10 +1,9 @@
-// api/fetch-web.js
+// api/fetch-html.js
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 
 export default async function handler(req, res) {
-  // CORS
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
@@ -18,7 +17,8 @@ export default async function handler(req, res) {
   }
 
   const forceDynamic = req.query.dynamic === 'true';
-  const debug = req.query.debug === 'true';   // returns final URL + canonical
+  const debug = req.query.debug === 'true';
+  const waitMs = parseInt(req.query.wait) || 0;   // extra wait in ms after idle (e.g., wait=2000)
 
   // 1. Static extraction (unless forced)
   if (!forceDynamic) {
@@ -67,11 +67,16 @@ export default async function handler(req, res) {
     }
   }
 
-  // 2. Dynamic headless browser (realistic simulation)
+  // 2. Dynamic headless browser (stealth + extra wait)
   let browser = null;
   try {
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [
+        ...chromium.args,
+        '--disable-blink-features=AutomationControlled',   // hide automation
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
+      ],
       defaultViewport: { width: 1920, height: 1080 },
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -79,6 +84,18 @@ export default async function handler(req, res) {
     });
 
     const page = await browser.newPage();
+
+    // ---- Stealth configuration ----
+    await page.evaluateOnNewDocument(() => {
+      // Overwrite the `navigator.webdriver` property
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      // Overwrite `navigator.plugins` length (bots often have 0)
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+      // Overwrite `navigator.languages`
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      // Pass the Chrome runtime check
+      window.chrome = { runtime: {} };
+    });
 
     // Set a realistic user agent and extra headers
     await page.setUserAgent(
@@ -89,7 +106,12 @@ export default async function handler(req, res) {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     });
 
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+
+    // Extra wait if requested (allows dynamic JS to finish injecting styles)
+    if (waitMs > 0) {
+      await page.waitForTimeout(waitMs);
+    }
 
     // Extract final URL, canonical, and stylesheets
     const { finalUrl, canonical, stylesheets } = await page.evaluate(() => {
