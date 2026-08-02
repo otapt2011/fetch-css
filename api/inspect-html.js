@@ -17,18 +17,24 @@ export default async function handler(req, res) {
   const forceDynamic = req.query.dynamic === 'true';
   const waitMs = parseInt(req.query.wait) || 0;
 
-  // Helpers
   function cleanHead(html) {
     const headMatch = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
     if (!headMatch) return '';
     let head = headMatch[1];
+
     head = head.replace(/<script\b[\s\S]*?<\/script>/gi, '');
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\balternate\b[^"']*["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\bpreconnect\b[^"']*["'][^>]*\/?>/gi, '');
+    head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*dns[^"']*["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']script["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']image["'][^>]*\/?>/gi, '');
     head = head.replace(/<base\b[^>]*\/?>/gi, '');
+
+    // Keep only charset and viewport meta tags
+    head = head.replace(/<meta\b[^>]*(?<!\bcharset\s*=\s*["'][^"']*["'])(?<!\bname\s*=\s*["']viewport["'])[^>]*\/?>/gi, '');
     head = head.replace(/<meta\b[^>]*?\bproperty\s*=\s*["']og:[^"']*["'][^>]*\/?>/gi, '');
+
+    head = head.replace(/^\s*[\r\n]/gm, '');
     return head.trim();
   }
 
@@ -37,7 +43,17 @@ export default async function handler(req, res) {
     return match ? `<${tag}${match[1]}>` : '';
   }
 
-  // Static extraction (always works, no Puppeteer needed)
+  // Extract body inner HTML and remove all <script>...</script>
+  function cleanBody(html) {
+    const bodyMatch = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+    if (!bodyMatch) return '';
+    let bodyContent = bodyMatch[1];
+    // Remove script tags
+    bodyContent = bodyContent.replace(/<script\b[\s\S]*?<\/script>/gi, '');
+    return bodyContent.trim();
+  }
+
+  // Static extraction
   try {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36' }
@@ -48,12 +64,12 @@ export default async function handler(req, res) {
     const payload = {
       htmlAttrs: extractTagAttrs(html, 'html'),
       bodyAttrs: extractTagAttrs(html, 'body'),
-      cleanedHead: cleanHead(html)
+      cleanedHead: cleanHead(html),
+      cleanedBody: cleanBody(html)
     };
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(200).json(payload);
   } catch (e) {
-    // If static fails and dynamic is forced, try headless browser
     if (forceDynamic) {
       let browser = null;
       try {
@@ -100,7 +116,8 @@ export default async function handler(req, res) {
         const payload = {
           htmlAttrs: extractTagAttrs(finalHtml, 'html'),
           bodyAttrs: extractTagAttrs(finalHtml, 'body'),
-          cleanedHead: cleanHead(finalHtml)
+          cleanedHead: cleanHead(finalHtml),
+          cleanedBody: cleanBody(finalHtml)
         };
         res.setHeader('Access-Control-Allow-Origin', '*');
         return res.status(200).json(payload);
@@ -109,7 +126,6 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: `Headless browser failed: ${err.message}` });
       }
     }
-    // Static failed and no dynamic – return error
     return res.status(500).json({ error: `Failed to fetch page: ${e.message}` });
   }
 }
