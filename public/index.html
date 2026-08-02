@@ -12,45 +12,54 @@
     .progress-bar { transition: width 0.15s ease; }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-2">
-  <div class="w-full max-w-md bg-white rounded-lg shadow p-3 space-y-2">
-    <h1 class="text-base font-semibold text-gray-800">
-      <i class="fa-solid fa-scroll mr-1"></i>CSS Scraper + Assets
-    </h1>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+  <!-- Header -->
+  <header class="bg-white shadow-sm px-3 py-2 flex items-center gap-2 flex-shrink-0">
+    <i class="fa-solid fa-scroll text-blue-600 text-lg"></i>
+    <h1 class="text-base font-semibold text-gray-800">CSS Scraper + Assets</h1>
+  </header>
 
-    <div class="space-y-1">
-      <label class="block text-xs text-gray-600">CSS file URL</label>
-      <div class="flex gap-1">
-        <input id="urlInput" type="url" placeholder="https://example.com/style.css"
-               class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400">
-        <button id="fetchBtn" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
-          <i class="fa-solid fa-download mr-1"></i>Scrape
-        </button>
+  <!-- Main (scrollable if needed) -->
+  <main class="flex-1 overflow-y-auto p-2 flex items-start justify-center">
+    <div class="w-full max-w-md space-y-2 mt-2">
+      <div class="space-y-1">
+        <label class="block text-xs text-gray-600">CSS file URL</label>
+        <div class="flex gap-1">
+          <input id="urlInput" type="url" placeholder="https://example.com/style.css"
+                 class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400">
+          <button id="fetchBtn" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
+            <i class="fa-solid fa-download mr-1"></i>Scrape
+          </button>
+        </div>
       </div>
+
+      <!-- Progress area -->
+      <div id="progressContainer" class="hidden space-y-1">
+        <div class="flex justify-between text-xs text-gray-500">
+          <span id="progressPercent">0%</span>
+          <span id="progressSize">0 / 0 KB</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+        </div>
+        <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
+      </div>
+
+      <!-- Download button -->
+      <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
+        <i class="fa-solid fa-file-zipper"></i> Download jCss.zip
+      </a>
+
+      <p id="errorMsg" class="hidden text-xs text-red-600"></p>
     </div>
+  </main>
 
-    <!-- Progress area -->
-    <div id="progressContainer" class="hidden space-y-1">
-      <div class="flex justify-between text-xs text-gray-500">
-        <span id="progressPercent">0%</span>
-        <span id="progressSize">0 / 0 KB</span>
-      </div>
-      <div class="w-full bg-gray-200 rounded-full h-2">
-        <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
-      </div>
-      <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
-    </div>
-
-    <!-- Download button -->
-    <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
-      <i class="fa-solid fa-file-zipper"></i> Download jCss.zip
-    </a>
-
-    <p id="errorMsg" class="hidden text-xs text-red-600"></p>
-  </div>
+  <!-- Footer -->
+  <footer class="bg-white border-t px-3 py-1.5 flex-shrink-0 text-xs text-gray-500 text-center">
+    <i class="fa-regular fa-copyright"></i> CSS Scraper Tool
+  </footer>
 
   <script>
-    // 👇 YOUR DEPLOYED PROXY URL
     const PROXY = 'https://fetch-css.vercel.app/api/fetch-css';
 
     const urlInput = document.getElementById('urlInput');
@@ -73,7 +82,6 @@
       setProgress(0, 0, 0, 'Fetching CSS...');
 
       try {
-        // 1. Fetch CSS
         const cssResponse = await fetch(`${PROXY}?url=${encodeURIComponent(url)}`);
         if (!cssResponse.ok) {
           const err = await cssResponse.json().catch(() => ({}));
@@ -82,12 +90,11 @@
         const cssText = await cssResponse.text();
         const cssByteLength = new Blob([cssText]).size;
 
-        // 2. Extract url() references (skip data: and absolute http(s)://)
         const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
         const rawMatches = [...cssText.matchAll(urlRegex)];
 
         const cssBaseUrl = url.substring(0, url.lastIndexOf('/') + 1);
-        const resolvedUrls = new Map(); // absoluteUrl -> filename
+        const resolvedUrls = new Map();
 
         rawMatches.forEach(match => {
           let path = match[1].trim().replace(/^["']|["']$/g, '');
@@ -118,7 +125,6 @@
         let downloadedBytes = cssByteLength;
         setProgress(0, 0, downloadedBytes, `Fetched CSS (${formatBytes(cssByteLength)})`);
 
-        // 3. Build zip
         const zip = new JSZip();
         const cssFilename = url.substring(url.lastIndexOf('/') + 1) || 'style.css';
         zip.file(cssFilename, cssText);
@@ -144,7 +150,6 @@
           } catch (e) { console.warn(`Skipped ${assetUrl}: ${e.message}`); }
         }
 
-        // 4. Generate zip
         progressDetail.textContent = 'Building zip...';
         const zipBlob = await zip.generateAsync({ type: 'blob' }, meta =>
           setProgress(meta.percent, 100, downloadedBytes, `Compressing... ${meta.percent.toFixed(0)}%`)
