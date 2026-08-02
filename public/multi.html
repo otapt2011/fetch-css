@@ -30,9 +30,14 @@
         <label class="block text-xs text-gray-600">JSON array of CSS URLs</label>
         <textarea id="jsonInput" rows="5" placeholder='["https://example.com/a.css", "https://example.com/b.css"]'
                   class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"></textarea>
-        <button id="fetchBtn" class="w-full px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
-          <i class="fa-solid fa-download mr-1"></i>Scrape All
-        </button>
+        <div class="flex gap-1">
+          <button id="sampleBtn" class="flex-1 px-3 py-1.5 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700 transition">
+            <i class="fa-solid fa-flask mr-1"></i>Scrape Sample
+          </button>
+          <button id="fetchBtn" class="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
+            <i class="fa-solid fa-download mr-1"></i>Scrape All
+          </button>
+        </div>
       </div>
 
       <!-- Overall + Current progress -->
@@ -67,6 +72,74 @@
     <i class="fa-regular fa-copyright"></i> Multi CSS Scraper Tool
   </footer>
 
+  <!-- ======================== SAMPLE DATA ======================== -->
+  <script>
+    // Predefined sample CSS URLs for quick testing
+    window.SAMPLE_URLS = [
+      "https://static.cdn.seaart.me/h5/prod/css/element-ui.fe785c75.225a6b445dee.css",
+      "https://static.cdn.seaart.me/h5/prod/css/vendors.app.8a6c828a.d4dd2953ee7a.css",
+      "https://static.cdn.seaart.me/h5/prod/css/vendors.app.1f20a385.29c8159c09b8.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.24120820.c207d552c785.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.748942c6.930a0867e0e6.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.d8770354.20c673cc3516.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.a97bfcba.b47e3eb732cd.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.5a11b65b.8cabe185f287.css",
+      "https://static.cdn.seaart.me/h5/prod/css/banner.b02c76f4.7706004649f8.css",
+      "https://static.cdn.seaart.me/h5/prod/css/view/FastTools/index.31ecd969.a79c9024eae7.css",
+      "https://static.cdn.seaart.me/h5/prod/css/view/FastTools/HdRepair/index.f71cff67.a32b9447411c.css",
+      "https://static.cdn.seaart.me/h5/prod/css/8.afd444f404ed.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1176.bc48c75fc44a.css",
+      "https://static.cdn.seaart.me/h5/prod/css/931.f2d4c9a192c8.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1184.292da8110c95.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1185.34970a81839c.css",
+      "https://static.cdn.seaart.me/h5/prod/css/lang-dialog.8bb3d535.18d0a14f0e68.css",
+      "https://static.cdn.seaart.me/h5/prod/css/notice-dialog.4d6052e8.96f48c861004.css",
+      "https://static.cdn.seaart.me/h5/prod/css/31.0f529e4a710d.css",
+      "https://static.cdn.seaart.me/h5/prod/css/41.f324a2930b35.css",
+      "https://static.cdn.seaart.me/h5/prod/css/40.dbb836acb6e8.css",
+      "https://static.cdn.seaart.me/h5/prod/css/55.175d216efe11.css",
+      "https://static.cdn.seaart.me/h5/prod/css/78.a729218a365c.css",
+      "https://static.cdn.seaart.me/h5/prod/css/76.88a0eb784c96.css",
+      "https://static.cdn.seaart.me/h5/prod/css/77.44a6d9975ae3.css",
+      "https://static.cdn.seaart.me/h5/prod/css/GeneratePopup.components/simple-generate.21833f8f.0440ad605f21.css",
+      "https://static.cdn.seaart.me/h5/prod/css/GeneratePopup.31ecd969.4f335747028e.css",
+      "https://static.cdn.seaart.me/h5/prod/css/vendors.EasyGenerate.253ae210.6773e83280e6.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1.538fe6ffb6a0.css",
+      "https://static.cdn.seaart.me/h5/prod/css/2.3721933cac8d.css",
+      "https://static.cdn.seaart.me/h5/prod/css/3.8fd6f55f101f.css",
+      "https://static.cdn.seaart.me/h5/prod/css/4.e47023b3b600.css",
+      "https://static.cdn.seaart.me/h5/prod/css/6.8a5e07483c4d.css",
+      "https://static.cdn.seaart.me/h5/prod/css/5.2529a598ad3e.css",
+      "https://static.cdn.seaart.me/h5/prod/css/9.33e1d7d6acb0.css",
+      "https://static.cdn.seaart.me/h5/prod/css/12.ff51db95dee2.css",
+      "https://static.cdn.seaart.me/h5/prod/css/13.873a86aab33e.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.f71cff67.5bea31380978.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.21833f8f.c397317267dc.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.b59217a9.ed658cf302ce.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.739de0d0.a2cf8b904ccf.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.f0f121c6.768431ad947b.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.34acf0f1.d863b0cd62c9.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.aefb9243.9f504a7005f4.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.0008081f.20d5edc9a32b.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.b4b17a97.2aca7a3c9ea2.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.deb7d3b8.62ba616808cf.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.127ae097.aa750c938eaa.css",
+      "https://static.cdn.seaart.me/h5/prod/css/23.32e1b3195825.css",
+      "https://static.cdn.seaart.me/h5/prod/css/payment.31ecd969.a46dbfd55065.css",
+      "https://static.cdn.seaart.me/h5/prod/css/463.4f1ce2823ccb.css",
+      "https://static.cdn.seaart.me/h5/prod/css/feature.f72e9571.bce2bfe0fbaf.css",
+      "https://static.cdn.seaart.me/h5/prod/css/trick-dialog.680d1ef8.74c4a21f2778.css",
+      "https://static.cdn.seaart.me/h5/prod/css/components/app-extend-box.21833f8f.7e868afc6a95.css",
+      "https://static.cdn.seaart.me/h5/prod/css/battle-pass.31ecd969.40106d9fa4c4.css",
+      "https://static.cdn.seaart.me/h5/prod/css/932.7f17ff5e0132.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1180.ba3f7686994b.css",
+      "https://static.cdn.seaart.me/h5/prod/css/ActivationDialogInPage.5764b6ac.d9a41a223e4f.css",
+      "https://static.cdn.seaart.me/h5/prod/css/ImageDetailPop.1e5feb00.2447b59d15ae.css",
+      "https://cdn.jsdelivr.net/npm/@adyen/adyen-web@latest/dist/adyen.css"
+    ];
+  </script>
+
+  <!-- ======================== MAIN LOGIC ======================== -->
   <script>
     const PROXY = 'https://fetch-css.vercel.app/api/fetch-css';
 
@@ -80,9 +153,10 @@
       return 'assets';
     }
 
-    // DOM
+    // DOM elements
     const jsonInput = document.getElementById('jsonInput');
     const fetchBtn = document.getElementById('fetchBtn');
+    const sampleBtn = document.getElementById('sampleBtn');
     const progressContainer = document.getElementById('progressContainer');
     const progressBar = document.getElementById('progressBar');
     const currentPercent = document.getElementById('currentPercent');
@@ -111,8 +185,8 @@
       return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
     }
 
-    // Helper to fetch a resource with streaming progress callback
-    async function fetchWithProgress(url, onProgress, onComplete) {
+    // Helper: fetch with streaming progress
+    async function fetchWithProgress(url, onProgress) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const contentLength = response.headers.get('content-length');
@@ -125,28 +199,13 @@
         if (done) break;
         chunks.push(value);
         received += value.length;
-        if (onProgress && total) {
-          onProgress(received, total);
-        } else if (onProgress) {
-          onProgress(received, 0); // 0 means indeterminate
-        }
+        if (onProgress) onProgress(received, total);
       }
-      const blob = new Blob(chunks);
-      if (onComplete) onComplete(blob.size);
-      return blob;
+      return new Blob(chunks);
     }
 
-    fetchBtn.addEventListener('click', async () => {
-      let urls;
-      try {
-        urls = JSON.parse(jsonInput.value.trim());
-        if (!Array.isArray(urls) || urls.length === 0) throw new Error('Invalid array');
-      } catch {
-        errorMsg.textContent = 'Invalid JSON array. Example: ["url1.css", "url2.css"]';
-        errorMsg.classList.remove('hidden');
-        return;
-      }
-
+    // Core scraping function for a list of URLs
+    async function processUrls(urls) {
       errorMsg.classList.add('hidden');
       downloadBtn.classList.add('hidden');
       progressContainer.classList.remove('hidden');
@@ -159,193 +218,207 @@
       const globalAssets = new Map(); // absoluteUrl -> { localName, category, blob }
       const cssFiles = [];
 
-      try {
-        for (let i = 0; i < urls.length; i++) {
-          const url = urls[i].trim();
-          const cssFilename = url.substring(url.lastIndexOf('/') + 1) || 'style.css';
-          currentFile.textContent = cssFilename;
-          setOverall(i + 1, urls.length, totalBytesDownloaded);
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i].trim();
+        const cssFilename = url.substring(url.lastIndexOf('/') + 1) || 'style.css';
+        currentFile.textContent = cssFilename;
+        setOverall(i + 1, urls.length, totalBytesDownloaded);
 
-          // ----- 1. Fetch CSS with streaming progress -----
-          setCurrentProgress(0, 'Downloading CSS…');
-          let cssBlob;
-          try {
-            cssBlob = await fetchWithProgress(
-              `${PROXY}?url=${encodeURIComponent(url)}`,
-              (received, total) => {
-                if (total) {
-                  const pct = (received / total) * 20; // CSS download occupies first 20%
-                  setCurrentProgress(pct, `Downloading CSS (${formatBytes(received)} / ${formatBytes(total)})`);
-                }
-              }
-            );
-          } catch (e) {
-            throw new Error(`Failed to fetch ${url}: ${e.message}`);
-          }
-          const cssText = await cssBlob.text();
-          const cssSize = cssBlob.size;
-          totalBytesDownloaded += cssSize;
-          setOverall(i + 1, urls.length, totalBytesDownloaded);
-          setCurrentProgress(20, 'Analyzing assets…');
-
-          // ----- 2. Extract asset URLs -----
-          const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
-          const matches = [...cssText.matchAll(urlRegex)];
-          const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
-          const fileAssets = new Map(); // absoluteUrl -> { start, end, originalMatch }
-
-          for (const match of matches) {
-            let rawPath = match[1].trim().replace(/^["']|["']$/g, '');
-            if (rawPath.startsWith('http://') || rawPath.startsWith('https://') || rawPath.startsWith('//')) continue;
-            try {
-              const absoluteUrl = new URL(rawPath, baseUrl).href;
-              if (!fileAssets.has(absoluteUrl)) {
-                if (!globalAssets.has(absoluteUrl)) {
-                  let filename = absoluteUrl.substring(absoluteUrl.lastIndexOf('/') + 1);
-                  const qIdx = filename.indexOf('?');
-                  if (qIdx !== -1) filename = filename.substring(0, qIdx);
-                  if (!filename) filename = 'asset';
-                  let unique = filename;
-                  const usedNames = new Set(Array.from(globalAssets.values()).map(v => v.localName));
-                  let counter = 1;
-                  while (usedNames.has(unique)) {
-                    const dot = filename.lastIndexOf('.');
-                    unique = dot !== -1
-                      ? filename.substring(0, dot) + `_${counter}` + filename.substring(dot)
-                      : filename + `_${counter}`;
-                    counter++;
-                  }
-                  globalAssets.set(absoluteUrl, {
-                    localName: unique,
-                    category: getCategory(filename),
-                    blob: null
-                  });
-                }
-                fileAssets.set(absoluteUrl, {
-                  start: match.index,
-                  end: match.index + match[0].length,
-                  originalMatch: match[0]
-                });
-              }
-            } catch (e) { /* ignore */ }
-          }
-
-          // ----- 3. Download assets for this CSS (only those not yet downloaded) -----
-          const assetsNeeded = Array.from(fileAssets.keys()).filter(
-            absUrl => !globalAssets.get(absUrl).blob
-          );
-          const totalAssets = assetsNeeded.length;
-
-          if (totalAssets > 0) {
-            // Progress range for assets: 20% to 90% (70% total)
-            const assetProgressStart = 20;
-            const assetProgressEnd = 90;
-            const assetProgressRange = assetProgressEnd - assetProgressStart;
-
-            // We'll track the cumulative asset bytes downloaded for this CSS
-            // and distribute the progress proportionally
-            let assetBytesAccum = 0;
-
-            for (let j = 0; j < assetsNeeded.length; j++) {
-              const assetUrl = assetsNeeded[j];
-              const info = globalAssets.get(assetUrl);
-              const detailText = `Asset ${j+1}/${totalAssets}: ${info.localName}`;
-              setCurrentProgress(
-                assetProgressStart + (assetProgressRange * (j / totalAssets)),
-                detailText
-              );
-
-              try {
-                const assetBlob = await fetchWithProgress(
-                  `${PROXY}?url=${encodeURIComponent(assetUrl)}`,
-                  (received, total) => {
-                    // For smooth updates we calculate the fraction of this asset
-                    const assetFraction = total ? received / total : 0;
-                    // The contribution of this asset to the overall progress bar
-                    const stepSize = assetProgressRange / totalAssets;
-                    // current asset start point: assetProgressStart + stepSize * j
-                    const assetStart = assetProgressStart + stepSize * j;
-                    const pct = assetStart + (assetFraction * stepSize);
-                    setCurrentProgress(pct, detailText);
-                  }
-                );
-                const blobSize = assetBlob.size;
-                totalBytesDownloaded += blobSize;
-                assetBytesAccum += blobSize;
-                globalAssets.get(assetUrl).blob = assetBlob;
-                setOverall(i + 1, urls.length, totalBytesDownloaded);
-              } catch (e) {
-                console.warn(`Skipped ${assetUrl}: ${e.message}`);
-                // Still advance the progress past this asset
-                setCurrentProgress(
-                  assetProgressStart + (assetProgressRange * ((j + 1) / totalAssets)),
-                  `Skipped ${info.localName}`
-                );
+        // 1. Fetch CSS with streaming progress
+        setCurrentProgress(0, 'Downloading CSS…');
+        let cssBlob;
+        try {
+          cssBlob = await fetchWithProgress(
+            `${PROXY}?url=${encodeURIComponent(url)}`,
+            (received, total) => {
+              if (total) {
+                const pct = (received / total) * 20;
+                setCurrentProgress(pct, `Downloading CSS (${formatBytes(received)} / ${formatBytes(total)})`);
               }
             }
-          }
+          );
+        } catch (e) {
+          throw new Error(`Failed to fetch ${url}: ${e.message}`);
+        }
+        const cssText = await cssBlob.text();
+        const cssSize = cssBlob.size;
+        totalBytesDownloaded += cssSize;
+        setOverall(i + 1, urls.length, totalBytesDownloaded);
+        setCurrentProgress(20, 'Analyzing assets…');
 
-          // ----- 4. Rewrite CSS with local paths -----
-          setCurrentProgress(90, 'Rewriting CSS…');
-          let rewritten = cssText;
-          const replacements = [];
-          for (const [absUrl, { start, end, originalMatch }] of fileAssets) {
-            const info = globalAssets.get(absUrl);
-            if (!info.blob) continue;
-            const localPath = `${info.category}/${info.localName}`;
-            replacements.push({ start, end, originalMatch, localPath });
-          }
-          replacements.sort((a, b) => b.start - a.start);
-          for (const { start, end, originalMatch, localPath } of replacements) {
-            const hasQuotes = /url\(\s*["']/.test(originalMatch);
-            const newUrl = hasQuotes ? `url("${localPath}")` : `url(${localPath})`;
-            rewritten = rewritten.substring(0, start) + newUrl + rewritten.substring(end);
-          }
+        // 2. Extract asset URLs
+        const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
+        const matches = [...cssText.matchAll(urlRegex)];
+        const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
+        const fileAssets = new Map(); // absoluteUrl -> { start, end, originalMatch }
 
-          // Generate unique filename for the CSS inside the zip
-          const parsedUrl = new URL(url);
-          let zipCssName = parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf('/') + 1);
-          if (!zipCssName) zipCssName = 'style.css';
-          const qIdx = zipCssName.indexOf('?');
-          if (qIdx !== -1) zipCssName = zipCssName.substring(0, qIdx);
-          const usedNames = new Set(cssFiles.map(f => f.filename));
-          let uniqueCssName = zipCssName;
-          let counter = 1;
-          while (usedNames.has(uniqueCssName)) {
-            const dot = zipCssName.lastIndexOf('.');
-            uniqueCssName = dot !== -1
-              ? zipCssName.substring(0, dot) + `_${counter}` + zipCssName.substring(dot)
-              : zipCssName + `_${counter}`;
-            counter++;
-          }
-          cssFiles.push({ filename: uniqueCssName, content: rewritten });
-
-          setCurrentProgress(100, 'Done');
+        for (const match of matches) {
+          let rawPath = match[1].trim().replace(/^["']|["']$/g, '');
+          if (rawPath.startsWith('http://') || rawPath.startsWith('https://') || rawPath.startsWith('//')) continue;
+          try {
+            const absoluteUrl = new URL(rawPath, baseUrl).href;
+            if (!fileAssets.has(absoluteUrl)) {
+              if (!globalAssets.has(absoluteUrl)) {
+                let filename = absoluteUrl.substring(absoluteUrl.lastIndexOf('/') + 1);
+                const qIdx = filename.indexOf('?');
+                if (qIdx !== -1) filename = filename.substring(0, qIdx);
+                if (!filename) filename = 'asset';
+                let unique = filename;
+                const usedNames = new Set(Array.from(globalAssets.values()).map(v => v.localName));
+                let counter = 1;
+                while (usedNames.has(unique)) {
+                  const dot = filename.lastIndexOf('.');
+                  unique = dot !== -1
+                    ? filename.substring(0, dot) + `_${counter}` + filename.substring(dot)
+                    : filename + `_${counter}`;
+                  counter++;
+                }
+                globalAssets.set(absoluteUrl, {
+                  localName: unique,
+                  category: getCategory(filename),
+                  blob: null
+                });
+              }
+              fileAssets.set(absoluteUrl, {
+                start: match.index,
+                end: match.index + match[0].length,
+                originalMatch: match[0]
+              });
+            }
+          } catch (e) { /* ignore */ }
         }
 
-        // ----- 5. Build ZIP -----
-        setCurrentProgress(0, 'Building zip…');
-        const zip = new JSZip();
-        for (const { filename, content } of cssFiles) {
-          zip.file(filename, content);
-        }
-        for (const [absUrl, { localName, category, blob }] of globalAssets) {
-          if (blob) {
-            zip.folder(category).file(localName, blob);
+        // 3. Download assets (only those not yet downloaded)
+        const assetsNeeded = Array.from(fileAssets.keys()).filter(
+          absUrl => !globalAssets.get(absUrl).blob
+        );
+        const totalAssets = assetsNeeded.length;
+
+        if (totalAssets > 0) {
+          const assetProgressStart = 20;
+          const assetProgressEnd = 90;
+          const assetProgressRange = assetProgressEnd - assetProgressStart;
+
+          for (let j = 0; j < assetsNeeded.length; j++) {
+            const assetUrl = assetsNeeded[j];
+            const info = globalAssets.get(assetUrl);
+            const detailText = `Asset ${j+1}/${totalAssets}: ${info.localName}`;
+            setCurrentProgress(
+              assetProgressStart + (assetProgressRange * (j / totalAssets)),
+              detailText
+            );
+
+            try {
+              const assetBlob = await fetchWithProgress(
+                `${PROXY}?url=${encodeURIComponent(assetUrl)}`,
+                (received, total) => {
+                  const stepSize = assetProgressRange / totalAssets;
+                  const assetFraction = total ? received / total : 0;
+                  const assetStart = assetProgressStart + stepSize * j;
+                  const pct = assetStart + (assetFraction * stepSize);
+                  setCurrentProgress(pct, detailText);
+                }
+              );
+              const blobSize = assetBlob.size;
+              totalBytesDownloaded += blobSize;
+              globalAssets.get(assetUrl).blob = assetBlob;
+              setOverall(i + 1, urls.length, totalBytesDownloaded);
+            } catch (e) {
+              console.warn(`Skipped ${assetUrl}: ${e.message}`);
+              setCurrentProgress(
+                assetProgressStart + (assetProgressRange * ((j + 1) / totalAssets)),
+                `Skipped ${info.localName}`
+              );
+            }
           }
         }
-        const zipBlob = await zip.generateAsync({ type: 'blob' }, meta => {
-          setCurrentProgress(meta.percent, `Compressing… ${meta.percent.toFixed(0)}%`);
-        });
 
-        const blobUrl = URL.createObjectURL(zipBlob);
-        downloadBtn.href = blobUrl;
-        downloadBtn.download = 'jCss.zip';
-        downloadBtn.classList.remove('hidden');
-        setCurrentProgress(100, 'Complete! Click download.');
-        overallCount.textContent = `CSS ${urls.length}/${urls.length}`;
-        downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
+        // 4. Rewrite CSS
+        setCurrentProgress(90, 'Rewriting CSS…');
+        let rewritten = cssText;
+        const replacements = [];
+        for (const [absUrl, { start, end, originalMatch }] of fileAssets) {
+          const info = globalAssets.get(absUrl);
+          if (!info.blob) continue;
+          const localPath = `${info.category}/${info.localName}`;
+          replacements.push({ start, end, originalMatch, localPath });
+        }
+        replacements.sort((a, b) => b.start - a.start);
+        for (const { start, end, originalMatch, localPath } of replacements) {
+          const hasQuotes = /url\(\s*["']/.test(originalMatch);
+          const newUrl = hasQuotes ? `url("${localPath}")` : `url(${localPath})`;
+          rewritten = rewritten.substring(0, start) + newUrl + rewritten.substring(end);
+        }
 
+        // Generate unique CSS filename for zip
+        const parsedUrl = new URL(url);
+        let zipCssName = parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf('/') + 1);
+        if (!zipCssName) zipCssName = 'style.css';
+        const qIdx = zipCssName.indexOf('?');
+        if (qIdx !== -1) zipCssName = zipCssName.substring(0, qIdx);
+        const usedNames = new Set(cssFiles.map(f => f.filename));
+        let uniqueCssName = zipCssName;
+        let counter = 1;
+        while (usedNames.has(uniqueCssName)) {
+          const dot = zipCssName.lastIndexOf('.');
+          uniqueCssName = dot !== -1
+            ? zipCssName.substring(0, dot) + `_${counter}` + zipCssName.substring(dot)
+            : zipCssName + `_${counter}`;
+          counter++;
+        }
+        cssFiles.push({ filename: uniqueCssName, content: rewritten });
+
+        setCurrentProgress(100, 'Done');
+      }
+
+      // 5. Build ZIP
+      setCurrentProgress(0, 'Building zip…');
+      const zip = new JSZip();
+      for (const { filename, content } of cssFiles) {
+        zip.file(filename, content);
+      }
+      for (const [absUrl, { localName, category, blob }] of globalAssets) {
+        if (blob) {
+          zip.folder(category).file(localName, blob);
+        }
+      }
+      const zipBlob = await zip.generateAsync({ type: 'blob' }, meta => {
+        setCurrentProgress(meta.percent, `Compressing… ${meta.percent.toFixed(0)}%`);
+      });
+
+      const blobUrl = URL.createObjectURL(zipBlob);
+      downloadBtn.href = blobUrl;
+      downloadBtn.download = 'jCss.zip';
+      downloadBtn.classList.remove('hidden');
+      setCurrentProgress(100, 'Complete! Click download.');
+      overallCount.textContent = `CSS ${urls.length}/${urls.length}`;
+      downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
+    }
+
+    // "Scrape All" button: parse textarea and run
+    fetchBtn.addEventListener('click', async () => {
+      let urls;
+      try {
+        urls = JSON.parse(jsonInput.value.trim());
+        if (!Array.isArray(urls) || urls.length === 0) throw new Error('Invalid array');
+      } catch {
+        errorMsg.textContent = 'Invalid JSON array. Example: ["url1.css", "url2.css"]';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+      try {
+        await processUrls(urls);
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove('hidden');
+        progressContainer.classList.add('hidden');
+      }
+    });
+
+    // "Scrape Sample" button: use the predefined SAMPLE_URLS array
+    sampleBtn.addEventListener('click', async () => {
+      try {
+        await processUrls(window.SAMPLE_URLS);
       } catch (err) {
         errorMsg.textContent = err.message;
         errorMsg.classList.remove('hidden');
