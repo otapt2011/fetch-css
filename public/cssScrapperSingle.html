@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Single CSS Scraper</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- JSZip (required by the external module) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- External scraper module -->
+  <script src="js/cssScrapperSingle.js"></script>
+  <style>
+    body { font-size: 14px; }
+    .progress-bar { transition: width 0.1s linear; }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+  <!-- Header -->
+  <header class="bg-white shadow-sm px-3 py-2 flex items-center gap-2 flex-shrink-0">
+    <i class="fa-solid fa-scroll text-blue-600 text-lg"></i>
+    <h1 class="text-base font-semibold text-gray-800">Single CSS Scraper</h1>
+    <a href="multi.html" class="ml-auto text-xs text-blue-600 hover:text-blue-800 transition">
+      <i class="fa-solid fa-layer-group mr-1"></i>Multi
+    </a>
+  </header>
+
+  <!-- Main -->
+  <main class="flex-1 overflow-y-auto p-2 flex items-start justify-center">
+    <div class="w-full max-w-md space-y-2 mt-2">
+      <div class="space-y-1">
+        <label class="block text-xs text-gray-600">CSS file URL</label>
+        <div class="flex gap-1">
+          <input id="urlInput" type="url" placeholder="https://example.com/style.css"
+                 class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400">
+          <button id="scrapeBtn" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
+            <i class="fa-solid fa-download mr-1"></i>Scrape
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="progressContainer" class="hidden space-y-1">
+        <div class="flex justify-between text-xs text-gray-500">
+          <span id="progressPercent">0%</span>
+          <span id="progressSize">0 KB</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+        </div>
+        <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
+      </div>
+
+      <!-- Download button -->
+      <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
+        <i class="fa-solid fa-file-zipper"></i> Download jCss.zip
+      </a>
+
+      <p id="errorMsg" class="hidden text-xs text-red-600"></p>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t px-3 py-1.5 flex-shrink-0 text-xs text-gray-500 text-center">
+    <i class="fa-regular fa-copyright"></i> CSS Scraper Tool
+  </footer>
+
+  <!-- UI controller -->
+  <script>
+    const urlInput = document.getElementById('urlInput');
+    const scrapeBtn = document.getElementById('scrapeBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressSize = document.getElementById('progressSize');
+    const progressDetail = document.getElementById('progressDetail');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const errorMsg = document.getElementById('errorMsg');
+
+    scrapeBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+
+      errorMsg.classList.add('hidden');
+      downloadBtn.classList.add('hidden');
+      progressContainer.classList.remove('hidden');
+      setProgress(0, 'Starting...');
+
+      try {
+        const blob = await CssScraperSingle.scrape(url, {
+          proxyUrl: 'https://fetch-css.vercel.app/api/fetch-css',
+          onProgress: (info) => {
+            const pct = info.filePercent;
+            setProgress(pct, info.detail);
+            progressSize.textContent = formatBytes(info.overallBytes);
+          }
+        });
+
+        const blobUrl = URL.createObjectURL(blob);
+        downloadBtn.href = blobUrl;
+        downloadBtn.download = 'jCss.zip';
+        downloadBtn.classList.remove('hidden');
+        setProgress(100, 'Complete! Click download.');
+        downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove('hidden');
+        progressContainer.classList.add('hidden');
+      }
+    });
+
+    function setProgress(pct, detail) {
+      progressPercent.textContent = `${Math.round(pct)}%`;
+      progressBar.style.width = `${pct}%`;
+      if (detail) progressDetail.textContent = detail;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      const kb = bytes / 1024;
+      return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
+    }
+  </script>
+</body>
+</html>
