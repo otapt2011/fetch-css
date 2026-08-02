@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Multi CSS Scraper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    body { font-size: 14px; }
+    .progress-bar { transition: width 0.15s ease; }
+    textarea { resize: vertical; }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+  <!-- Header -->
+  <header class="bg-white shadow-sm px-3 py-2 flex items-center gap-2 flex-shrink-0">
+    <i class="fa-solid fa-layer-group text-blue-600 text-lg"></i>
+    <h1 class="text-base font-semibold text-gray-800">Multi CSS Scraper</h1>
+  </header>
+
+  <!-- Main (scrollable) -->
+  <main class="flex-1 overflow-y-auto p-2 flex items-start justify-center">
+    <div class="w-full max-w-md space-y-2 mt-2">
+      <div class="space-y-1">
+        <label class="block text-xs text-gray-600">JSON array of CSS URLs</label>
+        <textarea id="jsonInput" rows="5" placeholder='["https://example.com/a.css", "https://example.com/b.css"]'
+                  class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"></textarea>
+        <button id="fetchBtn" class="w-full px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
+          <i class="fa-solid fa-download mr-1"></i>Scrape All
+        </button>
+      </div>
+
+      <!-- Progress -->
+      <div id="progressContainer" class="hidden space-y-1">
+        <div class="flex justify-between text-xs text-gray-500">
+          <span id="progressPercent">0%</span>
+          <span id="progressSize">0 / 0 KB</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+        </div>
+        <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
+      </div>
+
+      <!-- Download button -->
+      <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
+        <i class="fa-solid fa-file-zipper"></i> Download jCss.zip
+      </a>
+
+      <p id="errorMsg" class="hidden text-xs text-red-600"></p>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t px-3 py-1.5 flex-shrink-0 text-xs text-gray-500 text-center">
+    <i class="fa-regular fa-copyright"></i> Multi CSS Scraper Tool
+  </footer>
+
+  <script>
+    const PROXY = 'https://fetch-css.vercel.app/api/fetch-css';
+
+    // Category detection (same as single scraper)
+    const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'tiff']);
+    const fontExtensions = new Set(['woff', 'woff2', 'ttf', 'otf', 'eot']);
+
+    function getCategory(filename) {
+      const ext = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+      if (imageExtensions.has(ext)) return 'images';
+      if (fontExtensions.has(ext)) return 'fonts';
+      return 'assets';
+    }
+
+    // DOM elements
+    const jsonInput = document.getElementById('jsonInput');
+    const fetchBtn = document.getElementById('fetchBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressSize = document.getElementById('progressSize');
+    const progressDetail = document.getElementById('progressDetail');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const errorMsg = document.getElementById('errorMsg');
+
+    fetchBtn.addEventListener('click', async () => {
+      let urls;
+      try {
+        urls = JSON.parse(jsonInput.value.trim());
+        if (!Array.isArray(urls) || urls.length === 0) throw new Error('Invalid array');
+      } catch {
+        errorMsg.textContent = 'Invalid JSON array. Example: ["url1.css", "url2.css"]';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+
+      // Reset UI
+      errorMsg.classList.add('hidden');
+      downloadBtn.classList.add('hidden');
+      progressContainer.classList.remove('hidden');
+      setProgress(0, 0, 0, 'Starting...');
+
+      try {
+        // ---------------- 1. Fetch all CSS files ----------------
+        const cssData = []; // { url, text, baseUrl }
+        let downloadedBytes = 0;
+        const totalSteps = urls.length;
+
+        for (let i = 0; i < urls.length; i++) {
+          const url = urls[i].trim();
+          progressDetail.textContent = `Fetching CSS ${i+1}/${totalSteps}: ${url}`;
+          const resp = await fetch(`${PROXY}?url=${encodeURIComponent(url)}`);
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(`Failed to fetch ${url}: ${err.error || resp.statusText}`);
+          }
+          const text = await resp.text();
+          downloadedBytes += new Blob([text]).size;
+          const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
+          cssData.push({ url, text, baseUrl });
+          setProgress(0, 0, downloadedBytes, `Fetched CSS ${i+1}/${totalSteps}`);
+        }
+
+        // ---------------- 2. Collect all asset references ----------------
+        // Global map: absoluteUrl -> { localName, category }
+        const globalAssetMap = new Map();
+        // For each CSS file, we record an array of replacements: { start, end, newLocalPath }
+        const cssReplacements = cssData.map(() => []);
+
+        const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
+
+        cssData.forEach((css, index) => {
+          const { text, baseUrl } = css;
+          const matches = [...text.matchAll(urlRegex)];
+
+          matches.forEach(match => {
+            let rawPath = match[1].trim().replace(/^["']|["']$/g, '');
+            // Skip absolute
+            if (rawPath.startsWith('http://') || rawPath.startsWith('https://') || rawPath.startsWith('//')) return;
+
+            try {
+              const absoluteUrl = new URL(rawPath, baseUrl).href;
+
+              // Ensure global unique localName + category
+              if (!globalAssetMap.has(absoluteUrl)) {
+                let filename = absoluteUrl.substring(absoluteUrl.lastIndexOf('/') + 1);
+                const qIndex = filename.indexOf('?');
+                if (qIndex !== -1) filename = filename.substring(0, qIndex);
+                if (!filename) filename = 'asset';
+
+                let unique = filename;
+                let counter = 1;
+                const used = new Set(Array.from(globalAssetMap.values()).map(v => v.localName));
+                while (used.has(unique)) {
+                  const dot = filename.lastIndexOf('.');
+                  unique = dot !== -1
+                    ? filename.substring(0, dot) + `_${counter}` + filename.substring(dot)
+                    : filename + `_${counter}`;
+                  counter++;
+                }
+                globalAssetMap.set(absoluteUrl, {
+                  localName: unique,
+                  category: getCategory(filename)
+                });
+              }
+
+              // Save replacement info for this CSS file
+              const { localName, category } = globalAssetMap.get(absoluteUrl);
+              cssReplacements[index].push({
+                start: match.index,
+                end: match.index + match[0].length,
+                originalMatch: match[0],
+                newLocalPath: `${category}/${localName}`
+              });
+            } catch (e) { /* ignore */ }
+          });
+        });
+
+        // ---------------- 3. Download all unique assets ----------------
+        const assetEntries = Array.from(globalAssetMap.entries());
+        // Array to hold downloaded blobs: { localName, category, blob }
+        const downloadedAssets = [];
+
+        for (let i = 0; i < assetEntries.length; i++) {
+          const [assetUrl, { localName, category }] = assetEntries[i];
+          progressDetail.textContent = `Asset ${i+1}/${assetEntries.length}: ${localName}`;
+          try {
+            const assetResp = await fetch(`${PROXY}?url=${encodeURIComponent(assetUrl)}`);
+            if (!assetResp.ok) continue;
+            const reader = assetResp.body.getReader();
+            const chunks = [];
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              downloadedBytes += value.length;
+              setProgress(0, 0, downloadedBytes,
+                `Asset ${i+1}/${assetEntries.length}: ${localName}`);
+            }
+            downloadedAssets.push({ localName, category, blob: new Blob(chunks) });
+          } catch (e) {
+            console.warn(`Skipped ${assetUrl}: ${e.message}`);
+          }
+        }
+
+        // ---------------- 4. Rewrite each CSS and build zip ----------------
+        progressDetail.textContent = 'Building zip...';
+        const zip = new JSZip();
+
+        // Keep track of used CSS filenames to avoid collisions at root
+        const usedCssNames = new Set();
+
+        cssData.forEach((css, idx) => {
+          // Generate unique CSS filename
+          let cssFilename = css.url.substring(css.url.lastIndexOf('/') + 1);
+          const qIdx = cssFilename.indexOf('?');
+          if (qIdx !== -1) cssFilename = cssFilename.substring(0, qIdx);
+          if (!cssFilename) cssFilename = 'style.css';
+
+          let uniqueCssName = cssFilename;
+          let counter = 1;
+          while (usedCssNames.has(uniqueCssName)) {
+            const dot = cssFilename.lastIndexOf('.');
+            uniqueCssName = dot !== -1
+              ? cssFilename.substring(0, dot) + `_${counter}` + cssFilename.substring(dot)
+              : cssFilename + `_${counter}`;
+            counter++;
+          }
+          usedCssNames.add(uniqueCssName);
+
+          // Rewrite CSS text with local paths
+          let rewritten = css.text;
+          // Process replacements in reverse order to keep indices valid
+          const replacements = cssReplacements[idx].sort((a, b) => b.start - a.start);
+          replacements.forEach(({ start, end, originalMatch, newLocalPath }) => {
+            // Preserve quotes if present
+            const hasQuotes = /url\(\s*["']/.test(originalMatch);
+            const newUrl = hasQuotes ? `url("${newLocalPath}")` : `url(${newLocalPath})`;
+            rewritten = rewritten.substring(0, start) + newUrl + rewritten.substring(end);
+          });
+
+          zip.file(uniqueCssName, rewritten);
+        });
+
+        // Add all assets to their category folders
+        downloadedAssets.forEach(({ localName, category, blob }) => {
+          zip.folder(category).file(localName, blob);
+        });
+
+        // Generate zip with progress
+        const zipBlob = await zip.generateAsync({ type: 'blob' }, meta => {
+          setProgress(meta.percent, 100, downloadedBytes,
+            `Compressing... ${meta.percent.toFixed(0)}%`);
+        });
+
+        // ---------------- 5. Trigger download ----------------
+        const blobUrl = URL.createObjectURL(zipBlob);
+        downloadBtn.href = blobUrl;
+        downloadBtn.download = 'jCss.zip';
+        downloadBtn.classList.remove('hidden');
+        progressDetail.textContent = 'Done! Click to download.';
+        setProgress(100, 100, downloadedBytes, 'Complete');
+        downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
+
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove('hidden');
+        progressContainer.classList.add('hidden');
+      }
+    });
+
+    function setProgress(value, max, bytes, text) {
+      const pct = max ? Math.round((value / max) * 100) : 0;
+      progressPercent.textContent = max ? `${pct}%` : '...';
+      progressSize.textContent = formatBytes(bytes);
+      progressBar.style.width = max ? `${pct}%` : '50%';
+      if (text) progressDetail.textContent = text;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      const kb = bytes / 1024;
+      return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
+    }
+  </script>
+</body>
+</html>
