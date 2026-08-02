@@ -3,18 +3,17 @@
  * Dependency: JSZip (global JSZip)
  * 
  * Usage:
- *   // Single
  *   const blob = await CssScraper.scrape('https://.../style.css', { ... });
- * 
- *   // Multi
+ *   // or with array for multi
  *   const blob = await CssScraper.scrape(['url1.css', 'url2.css'], { ... });
  * 
- *   // Options:
- *   //   proxyUrl   – your CORS proxy endpoint (default: 'https://fetch-css.vercel.app/api/fetch-css')
- *   //   onProgress – callback(info) where info = {
- *   //       overallPercent, filePercent, detail, overallBytes,
- *   //       currentFile, cssIndex, cssTotal
- *   //   }
+ * Options:
+ *   proxyUrl   – your CORS proxy endpoint (default: 'https://fetch-css.vercel.app/api/fetch-css')
+ *   onProgress – callback(info) where info = {
+ *       overallPercent, filePercent, detail, overallBytes,
+ *       currentFile, cssIndex, cssTotal,
+ *       indeterminate   // true if current operation has unknown total size
+ *   }
  */
 ;(function () {
   'use strict';
@@ -24,11 +23,9 @@
     return;
   }
 
-  // ----- constants -----
   const IMAGE_EXTS = new Set(['png','jpg','jpeg','gif','svg','webp','ico','bmp','tiff']);
   const FONT_EXTS  = new Set(['woff','woff2','ttf','otf','eot']);
 
-  // ----- helpers -----
   function getCategory(filename) {
     const ext = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
     if (IMAGE_EXTS.has(ext)) return 'images';
@@ -43,7 +40,6 @@
     return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
   }
 
-  // Streaming fetch with optional progress callback (received, total)
   async function fetchWithProgress(url, onProgress) {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -62,9 +58,7 @@
     return new Blob(chunks);
   }
 
-  // ----- core scraping logic (works for both single and multi) -----
   async function scrape(input, options = {}) {
-    // Normalize input
     const urls = Array.isArray(input) ? input : [input];
     if (urls.length === 0) throw new Error('No URLs provided');
 
@@ -75,11 +69,10 @@
 
     const totalCss = urls.length;
     let overallBytes = 0;
-    const globalAssets = new Map();   // absoluteUrl -> { localName, category, blob }
-    const cssFiles = [];              // { filename, content }
+    const globalAssets = new Map();
+    const cssFiles = [];
 
-    // Helper to emit progress
-    const emit = (overallPct, filePct, detail, currentFile, cssIndex) => {
+    const emit = (overallPct, filePct, detail, currentFile, cssIndex, indeterminate = false) => {
       if (onProgress) {
         onProgress({
           overallPercent: overallPct,
@@ -88,7 +81,8 @@
           overallBytes: overallBytes,
           currentFile: currentFile,
           cssIndex: cssIndex,
-          cssTotal: totalCss
+          cssTotal: totalCss,
+          indeterminate: indeterminate
         });
       }
     };
@@ -97,21 +91,22 @@
       const url = urls[i].trim();
       const cssFilename = url.substring(url.lastIndexOf('/') + 1) || 'style.css';
       const cssIndex = i + 1;
-      const overallPctStart = ((i) / totalCss) * 100;        // 0% for first file, progresses
-      const overallPctEnd   = ((i + 1) / totalCss) * 100;    // end of this file's contribution
+      const overallPctStart = (i / totalCss) * 100;
+      const overallPctEnd   = ((i + 1) / totalCss) * 100;
 
       // --- 1. Fetch CSS ---
-      emit(overallPctStart, 0, 'Downloading CSS…', cssFilename, cssIndex);
+      emit(overallPctStart, 0, 'Downloading CSS…', cssFilename, cssIndex, true);   // start indeterminate
       let cssBlob;
       try {
         cssBlob = await fetchWithProgress(
           `${proxyUrl}?url=${encodeURIComponent(url)}`,
           (received, total) => {
-            const filePct = total ? (received / total) * 20 : 0;   // first 20% for CSS download
+            const hasTotal = !!total;
+            const filePct = hasTotal ? (received / total) * 20 : 0;
             const overallPct = overallPctStart + (filePct / 100) * (overallPctEnd - overallPctStart);
             emit(overallPct, filePct,
                  `Downloading CSS (${formatBytes(received)} / ${formatBytes(total || 0)})`,
-                 cssFilename, cssIndex);
+                 cssFilename, cssIndex, !hasTotal);
           }
         );
       } catch (e) {
@@ -119,13 +114,13 @@
       }
       const cssText = await cssBlob.text();
       overallBytes += cssBlob.size;
-      emit(overallPctStart, 20, 'Analyzing assets…', cssFilename, cssIndex);
+      emit(overallPctStart, 20, 'Analyzing assets…', cssFilename, cssIndex, false);
 
       // --- 2. Extract asset URLs ---
       const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
       const matches = [...cssText.matchAll(urlRegex)];
       const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
-      const fileAssets = new Map();   // absoluteUrl -> { start, end, originalMatch }
+      const fileAssets = new Map();
 
       for (const match of matches) {
         let rawPath = match[1].trim().replace(/^["']|["']$/g, '');
@@ -160,10 +155,10 @@
               originalMatch: match[0]
             });
           }
-        } catch (e) { /* ignore malformed */ }
+        } catch (e) { /* ignore */ }
       }
 
-      // --- 3. Download assets for this CSS (only those not yet downloaded) ---
+      // --- 3. Download assets ---
       const assetsNeeded = Array.from(fileAssets.keys()).filter(
         absUrl => !globalAssets.get(absUrl).blob
       );
@@ -178,42 +173,41 @@
           const assetUrl = assetsNeeded[j];
           const info = globalAssets.get(assetUrl);
           const detail = `Asset ${j+1}/${totalAssets}: ${info.localName}`;
-
-          // File‑level progress at the start of this asset
           const filePctStart = assetProgressStart + (range * (j / totalAssets));
+          // start of asset – indeterminate true
           emit(overallPctStart + (filePctStart / 100) * (overallPctEnd - overallPctStart),
-               filePctStart, detail, cssFilename, cssIndex);
+               filePctStart, detail, cssFilename, cssIndex, true);
 
           try {
             const assetBlob = await fetchWithProgress(
               `${proxyUrl}?url=${encodeURIComponent(assetUrl)}`,
               (received, total) => {
+                const hasTotal = !!total;
                 const step = range / totalAssets;
-                const fraction = total ? received / total : 0;
+                const fraction = hasTotal ? received / total : 0;
                 const filePct = filePctStart + fraction * step;
                 const overallPct = overallPctStart + (filePct / 100) * (overallPctEnd - overallPctStart);
-                emit(overallPct, filePct, detail, cssFilename, cssIndex);
+                emit(overallPct, filePct, detail, cssFilename, cssIndex, !hasTotal);
               }
             );
             overallBytes += assetBlob.size;
             globalAssets.get(assetUrl).blob = assetBlob;
-            // Mark completion
             const filePctEnd = assetProgressStart + (range * ((j + 1) / totalAssets));
             const overallPctEndAsset = overallPctStart + (filePctEnd / 100) * (overallPctEnd - overallPctStart);
-            emit(overallPctEndAsset, filePctEnd, detail, cssFilename, cssIndex);
+            emit(overallPctEndAsset, filePctEnd, detail, cssFilename, cssIndex, false);
           } catch (e) {
             console.warn(`Skipped ${assetUrl}: ${e.message}`);
             const filePctEnd = assetProgressStart + (range * ((j + 1) / totalAssets));
             const overallPctEndAsset = overallPctStart + (filePctEnd / 100) * (overallPctEnd - overallPctStart);
-            emit(overallPctEndAsset, filePctEnd, `Skipped ${info.localName}`, cssFilename, cssIndex);
+            emit(overallPctEndAsset, filePctEnd, `Skipped ${info.localName}`, cssFilename, cssIndex, false);
           }
         }
       }
 
-      // --- 4. Rewrite CSS with local paths ---
+      // --- 4. Rewrite CSS ---
       const filePctRewriting = 90;
       const overallPctRewriting = overallPctStart + (filePctRewriting / 100) * (overallPctEnd - overallPctStart);
-      emit(overallPctRewriting, filePctRewriting, 'Rewriting CSS…', cssFilename, cssIndex);
+      emit(overallPctRewriting, filePctRewriting, 'Rewriting CSS…', cssFilename, cssIndex, false);
 
       let rewritten = cssText;
       const replacements = [];
@@ -230,7 +224,6 @@
         rewritten = rewritten.substring(0, start) + newUrl + rewritten.substring(end);
       }
 
-      // Generate unique zip filename for this CSS
       const parsedUrl = new URL(url);
       let zipCssName = parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf('/') + 1);
       if (!zipCssName) zipCssName = 'style.css';
@@ -248,13 +241,12 @@
       }
       cssFiles.push({ filename: uniqueCssName, content: rewritten });
 
-      // File complete
-      emit(overallPctEnd, 100, 'Done', cssFilename, cssIndex);
+      emit(overallPctEnd, 100, 'Done', cssFilename, cssIndex, false);
     }
 
-    // --- 5. Build final ZIP ---
+    // --- 5. Build ZIP ---
     const zipStartOverall = 95;
-    emit(zipStartOverall, 0, 'Building zip…', '', totalCss);
+    emit(zipStartOverall, 0, 'Building zip…', '', totalCss, false);
     const zip = new JSZip();
     for (const { filename, content } of cssFiles) {
       zip.file(filename, content);
@@ -264,12 +256,11 @@
     }
     const zipBlob = await zip.generateAsync({ type: 'blob' }, meta => {
       const pct = zipStartOverall + (meta.percent / 100) * (100 - zipStartOverall);
-      emit(pct, meta.percent, `Compressing… ${meta.percent.toFixed(0)}%`, '', totalCss);
+      emit(pct, meta.percent, `Compressing… ${meta.percent.toFixed(0)}%`, '', totalCss, false);
     });
-    emit(100, 100, 'Complete', '', totalCss);
+    emit(100, 100, 'Complete', '', totalCss, false);
     return zipBlob;
   }
 
-  // ----- public API -----
   window.CssScraper = { scrape };
 })();
