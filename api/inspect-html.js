@@ -1,7 +1,7 @@
 // api/inspect-html.js
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import chromium from '@sparticuz/chromium';   // now version 110.0.0
 
 export default async function handler(req, res) {
   // CORS
@@ -19,37 +19,30 @@ export default async function handler(req, res) {
   const debug = req.query.debug === 'true';
   const waitMs = parseInt(req.query.wait) || 0;
 
-  // Helper: clean head from HTML (works for both static and dynamic)
+  // Helper: clean head from HTML
   function cleanHead(html) {
     const headMatch = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
     if (!headMatch) return '';
     let head = headMatch[1];
 
-    // Remove <script>...<\/script>
     head = head.replace(/<script\b[\s\S]*?<\/script>/gi, '');
-    // Remove <link rel="alternate" ...>
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\balternate\b[^"']*["'][^>]*\/?>/gi, '');
-    // Remove <link rel="preconnect" ...>
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\bpreconnect\b[^"']*["'][^>]*\/?>/gi, '');
-    // Remove <link as="script" ...>
     head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']script["'][^>]*\/?>/gi, '');
-    // Remove <link as="image" ...>
     head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']image["'][^>]*\/?>/gi, '');
-    // Remove <base ...>
     head = head.replace(/<base\b[^>]*\/?>/gi, '');
-    // Remove Open Graph <meta property="og:...">
     head = head.replace(/<meta\b[^>]*?\bproperty\s*=\s*["']og:[^"']*["'][^>]*\/?>/gi, '');
 
     return head.trim();
   }
 
-  // Helper: extract opening tag attributes
+  // Extract opening tag attributes
   function extractTagAttrs(html, tag) {
     const match = html.match(new RegExp(`<${tag}\\b([^>]*)>`, 'i'));
     return match ? `<${tag}${match[1]}>` : '';
   }
 
-  // Static extraction (cheerio) – fast path
+  // Static extraction (cheerio)
   if (!forceDynamic) {
     try {
       const response = await fetch(url, {
@@ -80,7 +73,6 @@ export default async function handler(req, res) {
         } catch {}
       });
 
-      // If we got some stylesheets, return static result
       if (stylesheets.length > 0) {
         const payload = {
           url,
@@ -100,14 +92,11 @@ export default async function handler(req, res) {
     }
   }
 
-  // Dynamic headless browser path
+  // Dynamic headless browser
   let browser = null;
   try {
     browser = await puppeteer.launch({
-      args: [
-        ...chromium.args,
-        '--disable-blink-features=AutomationControlled',
-      ],
+      args: chromium.args,
       defaultViewport: { width: 1920, height: 1080 },
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -130,14 +119,12 @@ export default async function handler(req, res) {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     });
 
-    // Set cookies to simulate returning visitor
     const domain = new URL(url).hostname;
     await page.setCookie(
       { name: 'visitor', value: 'true', domain, path: '/' },
       { name: 'session', value: 'active', domain, path: '/' }
     );
 
-    // Intercept network stylesheet requests
     const stylesheetUrls = new Set();
     await page.setRequestInterception(true);
     page.on('request', (request) => request.continue());
@@ -149,16 +136,13 @@ export default async function handler(req, res) {
 
     await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
 
-    // Extra wait if requested
     if (waitMs > 0) {
       await page.waitForTimeout(waitMs);
     }
 
-    // Simulate user presence
     await page.mouse.move(100, 100);
     await page.evaluate(() => window.scrollBy(0, 100));
 
-    // Extract data from final DOM
     const { finalUrl, canonical, htmlAttrs, bodyAttrs, domStylesheets } = await page.evaluate(() => {
       const final = window.location.href;
       const canonEl = document.querySelector('link[rel="canonical"]');
@@ -173,11 +157,9 @@ export default async function handler(req, res) {
       return { finalUrl: final, canonical: canon, htmlAttrs: htmlTag, bodyAttrs: bodyTag, domStylesheets: sheets };
     });
 
-    // Combine network and DOM stylesheets
     domStylesheets.forEach(href => stylesheetUrls.add(href));
     const allStylesheets = Array.from(stylesheetUrls);
 
-    // Get the final HTML for cleaning head
     const finalHtml = await page.content();
     const cleanedHead = cleanHead(finalHtml);
 
