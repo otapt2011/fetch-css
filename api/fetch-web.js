@@ -1,4 +1,4 @@
-// api/fetch-web.js
+// api/fetch-html.js
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   const debug = req.query.debug === 'true';
   const waitMs = parseInt(req.query.wait) || 0;
 
-  // 1. Static extraction (cheerio) – unchanged, but now we'll always return even if empty
+  // 1. Static extraction (cheerio) – unchanged, returns early unless forced
   if (!forceDynamic) {
     try {
       const response = await fetch(url, {
@@ -43,8 +43,7 @@ export default async function handler(req, res) {
         } catch {}
       });
 
-      // Always return static result; dynamic will be an add-on if forced
-      if (!forceDynamic) {
+      if (stylesheets.length > 0) {
         res.setHeader('Access-Control-Allow-Origin', '*');
         const payload = { url, stylesheets };
         if (debug) {
@@ -58,13 +57,15 @@ export default async function handler(req, res) {
     }
   }
 
-  // 2. Dynamic – intercept all .css requests
+  // 2. Dynamic headless browser – stealth + cookies + localStorage + interaction
   let browser = null;
   try {
     browser = await puppeteer.launch({
       args: [
         ...chromium.args,
         '--disable-blink-features=AutomationControlled',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
       ],
       defaultViewport: { width: 1920, height: 1080 },
       executablePath: await chromium.executablePath(),
@@ -74,7 +75,7 @@ export default async function handler(req, res) {
 
     const page = await browser.newPage();
 
-    // Stealth
+    // Stealth JavaScript overrides
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
       Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
@@ -82,15 +83,28 @@ export default async function handler(req, res) {
       window.chrome = { runtime: {} };
     });
 
+    // Realistic headers
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     });
 
-    // Collect all stylesheet URLs from network requests
-    const stylesheetUrls = new Set();
+    // Set cookies – mimic a returning visitor
+    const domain = new URL(url).hostname;
+    await page.setCookie(
+      { name: 'visitor', value: 'true', domain: domain, path: '/' },
+      { name: 'session', value: 'active', domain: domain, path: '/' }
+    );
 
+    // Inject localStorage & sessionStorage items before navigation
+    await page.evaluateOnNewDocument(() => {
+      localStorage.setItem('visited', 'true');
+      sessionStorage.setItem('active', 'true');
+    });
+
+    // Intercept and collect all stylesheet network requests
+    const stylesheetUrls = new Set();
     await page.setRequestInterception(true);
     page.on('request', (request) => request.continue());
     page.on('response', (response) => {
@@ -99,13 +113,19 @@ export default async function handler(req, res) {
       }
     });
 
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    // Navigate
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
 
+    // Simulate user presence (scroll, mousemove)
+    await page.mouse.move(100, 100);
+    await page.evaluate(() => window.scrollBy(0, 100));
+
+    // Extra wait after activity
     if (waitMs > 0) {
       await page.waitForTimeout(waitMs);
     }
 
-    // Also capture any <link> still in DOM for safety
+    // Also grab any remaining <link> tags in the DOM
     const domLinks = await page.evaluate(() => {
       const links = Array.from(document.querySelectorAll('link[rel="stylesheet"], link[as="style"]'));
       return links.map(l => l.href).filter(h => h);
