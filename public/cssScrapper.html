@@ -4,13 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>CSS Scraper</title>
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Awesome CDN -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <!-- JSZip (required by cssScrapper.js) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <!-- External unified scraper module -->
   <script src="cssScrapper.js"></script>
   <style>
     body { font-size: 14px; }
@@ -32,7 +28,7 @@
   <!-- Main -->
   <main class="flex-1 overflow-y-auto p-2 flex items-start justify-center">
     <div class="w-full max-w-md space-y-2 mt-2">
-      <!-- Tab buttons -->
+      <!-- Tabs -->
       <div class="flex gap-1">
         <button id="tabSingle" class="tab-btn active flex-1 px-3 py-1.5 text-xs rounded border border-blue-600 bg-blue-600 text-white transition">
           <i class="fa-solid fa-file mr-1"></i>Single CSS
@@ -42,7 +38,7 @@
         </button>
       </div>
 
-      <!-- Single CSS input -->
+      <!-- Single panel -->
       <div id="panelSingle" class="tab-content active space-y-2">
         <div class="space-y-1">
           <label class="block text-xs text-gray-600">CSS file URL</label>
@@ -56,7 +52,7 @@
         </div>
       </div>
 
-      <!-- Multi CSS input -->
+      <!-- Multi panel -->
       <div id="panelMulti" class="tab-content space-y-2">
         <div class="space-y-1">
           <label class="block text-xs text-gray-600">JSON array of CSS URLs</label>
@@ -73,17 +69,18 @@
         </div>
       </div>
 
-      <!-- Progress area (shared) -->
+      <!-- Progress (shared) -->
       <div id="progressContainer" class="hidden space-y-2">
-        <!-- Overall (for multi) or generic -->
         <div class="flex justify-between text-xs text-gray-600">
           <span id="overallCount">0/0</span>
           <span id="overallSize">0 KB</span>
         </div>
-        <!-- Per-file progress -->
         <div class="space-y-1">
           <div class="flex justify-between text-xs text-gray-500">
-            <span id="currentPercent">0%</span>
+            <!-- This span will show either a spinner or a number -->
+            <span id="currentPercent">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            </span>
             <span id="currentFile">—</span>
           </div>
           <div class="w-full bg-gray-200 rounded-full h-2">
@@ -97,18 +94,16 @@
       <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
         <i class="fa-solid fa-file-zipper"></i> Download jCss.zip
       </a>
-
-      <!-- Error message -->
       <p id="errorMsg" class="hidden text-xs text-red-600"></p>
     </div>
   </main>
 
   <!-- Footer -->
   <footer class="bg-white border-t px-3 py-1.5 flex-shrink-0 text-xs text-gray-500 text-center">
-    <i class="fa-regular fa-copyright"></i> CSS Scraper Tool &mdash; Unified Module
+    <i class="fa-regular fa-copyright"></i> CSS Scraper Tool — Unified Module
   </footer>
 
-  <!-- ======================== SAMPLE DATA (for multi) ======================== -->
+  <!-- Sample data for multi -->
   <script>
     window.SAMPLE_URLS = [
       "https://static.cdn.seaart.me/h5/prod/css/element-ui.fe785c75.225a6b445dee.css",
@@ -174,9 +169,8 @@
     ];
   </script>
 
-  <!-- ======================== UI CONTROLLER ======================== -->
+  <!-- UI Controller -->
   <script>
-    // DOM references
     const tabSingle = document.getElementById('tabSingle');
     const tabMulti = document.getElementById('tabMulti');
     const panelSingle = document.getElementById('panelSingle');
@@ -196,36 +190,21 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const errorMsg = document.getElementById('errorMsg');
 
-    // Tab switching
     function activateTab(single) {
       if (single) {
-        tabSingle.classList.add('active', 'bg-blue-600', 'text-white', 'border-blue-600');
-        tabSingle.classList.remove('border-gray-300', 'text-gray-600', 'bg-white');
-        tabMulti.classList.remove('active', 'bg-blue-600', 'text-white', 'border-blue-600');
-        tabMulti.classList.add('border-gray-300', 'text-gray-600', 'bg-white');
+        tabSingle.className = 'tab-btn active flex-1 px-3 py-1.5 text-xs rounded border border-blue-600 bg-blue-600 text-white transition';
+        tabMulti.className = 'tab-btn flex-1 px-3 py-1.5 text-xs rounded border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition';
         panelSingle.classList.add('active');
         panelMulti.classList.remove('active');
       } else {
-        tabMulti.classList.add('active', 'bg-blue-600', 'text-white', 'border-blue-600');
-        tabMulti.classList.remove('border-gray-300', 'text-gray-600', 'bg-white');
-        tabSingle.classList.remove('active', 'bg-blue-600', 'text-white', 'border-blue-600');
-        tabSingle.classList.add('border-gray-300', 'text-gray-600', 'bg-white');
+        tabMulti.className = 'tab-btn active flex-1 px-3 py-1.5 text-xs rounded border border-blue-600 bg-blue-600 text-white transition';
+        tabSingle.className = 'tab-btn flex-1 px-3 py-1.5 text-xs rounded border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition';
         panelMulti.classList.add('active');
         panelSingle.classList.remove('active');
       }
     }
     tabSingle.addEventListener('click', () => activateTab(true));
     tabMulti.addEventListener('click', () => activateTab(false));
-
-    // Helper functions
-    function setProgress(filePct, detailText, cssIdx, cssTotal, totalBytes, currentFileName) {
-      currentPercent.textContent = `${Math.round(filePct)}%`;
-      progressBar.style.width = `${filePct}%`;
-      if (detailText) progressDetail.textContent = detailText;
-      overallCount.textContent = `CSS ${cssIdx}/${cssTotal}`;
-      overallSize.textContent = formatBytes(totalBytes);
-      if (currentFileName) currentFile.textContent = currentFileName;
-    }
 
     function formatBytes(bytes) {
       if (bytes === 0) return '0 B';
@@ -238,51 +217,61 @@
       errorMsg.classList.add('hidden');
       downloadBtn.classList.add('hidden');
       progressContainer.classList.remove('hidden');
-      setProgress(0, 'Starting...', 0, 0, 0, '—');
+      progressBar.style.width = '0%';
+      currentPercent.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      overallCount.textContent = '0/0';
+      overallSize.textContent = '0 KB';
+      currentFile.textContent = '—';
+      progressDetail.textContent = 'Starting...';
     }
 
-    // Common scraping handler
     async function handleScrape(input) {
-  resetUI();
-  let lastInfo = null;
+      resetUI();
+      let lastInfo = null;
 
-  try {
-    const blob = await CssScraper.scrape(input, {
-      proxyUrl: 'https://fetch-css.vercel.app/api/fetch-css',
-      onProgress: (info) => {
-        lastInfo = info;
-        // ---- bar = overall progress ----
-        progressBar.style.width = `${info.overallPercent}%`;
-        // ---- label = current file progress ----
-        currentPercent.textContent = `${Math.round(info.filePercent)}%`;
-        if (info.detail) progressDetail.textContent = info.detail;
-        overallCount.textContent = `CSS ${info.cssIndex}/${info.cssTotal}`;
-        overallSize.textContent = formatBytes(info.overallBytes);
-        if (info.currentFile) currentFile.textContent = info.currentFile;
+      try {
+        const blob = await CssScraper.scrape(input, {
+          proxyUrl: 'https://fetch-css.vercel.app/api/fetch-css',
+          onProgress: (info) => {
+            lastInfo = info;
+
+            // Overall bar
+            progressBar.style.width = `${info.overallPercent}%`;
+
+            // Per-file indicator: spinner or percentage
+            if (info.indeterminate) {
+              currentPercent.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            } else {
+              currentPercent.textContent = `${Math.round(info.filePercent)}%`;
+            }
+
+            if (info.detail) progressDetail.textContent = info.detail;
+            overallCount.textContent = `CSS ${info.cssIndex}/${info.cssTotal}`;
+            overallSize.textContent = formatBytes(info.overallBytes);
+            if (info.currentFile) currentFile.textContent = info.currentFile;
+          }
+        });
+
+        const blobUrl = URL.createObjectURL(blob);
+        downloadBtn.href = blobUrl;
+        downloadBtn.download = 'jCss.zip';
+        downloadBtn.classList.remove('hidden');
+        const cssTotal = lastInfo ? lastInfo.cssTotal : 1;
+        const bytes = lastInfo ? lastInfo.overallBytes : 0;
+        progressBar.style.width = '100%';
+        currentPercent.textContent = '100%';
+        overallCount.textContent = `CSS ${cssTotal}/${cssTotal}`;
+        overallSize.textContent = formatBytes(bytes);
+        progressDetail.textContent = 'Complete! Click download.';
+        currentFile.textContent = '—';
+        downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove('hidden');
+        progressContainer.classList.add('hidden');
       }
-    });
+    }
 
-    const blobUrl = URL.createObjectURL(blob);
-    downloadBtn.href = blobUrl;
-    downloadBtn.download = 'jCss.zip';
-    downloadBtn.classList.remove('hidden');
-    const cssTotal = lastInfo ? lastInfo.cssTotal : 1;
-    const bytes = lastInfo ? lastInfo.overallBytes : 0;
-    progressBar.style.width = '100%';
-    currentPercent.textContent = '100%';
-    overallCount.textContent = `CSS ${cssTotal}/${cssTotal}`;
-    overallSize.textContent = formatBytes(bytes);
-    progressDetail.textContent = 'Complete! Click download.';
-    currentFile.textContent = '—';
-    downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
-  } catch (err) {
-    errorMsg.textContent = err.message;
-    errorMsg.classList.remove('hidden');
-    progressContainer.classList.add('hidden');
-  }
-}
-
-    // Single scrape button
     scrapeSingleBtn.addEventListener('click', async () => {
       const url = singleUrl.value.trim();
       if (!url) {
@@ -293,7 +282,6 @@
       await handleScrape(url);
     });
 
-    // Multi scrape button (from JSON textarea)
     scrapeMultiBtn.addEventListener('click', async () => {
       let urls;
       try {
@@ -307,16 +295,8 @@
       await handleScrape(urls);
     });
 
-    // Sample button for multi
     sampleBtn.addEventListener('click', () => {
       multiJson.value = JSON.stringify(window.SAMPLE_URLS, null, 2);
-      // optionally trigger scrape automatically? We'll let the user click Scrape All
-      // or we could auto-scrape. We'll just fill the textarea.
-      // Then call the same handler? The button "Scrape All" already does that.
-      // We'll just fill the textarea and focus the Scrape All button.
-      // Better: just fill and let the user decide, but we can also automatically scrape:
-      // For convenience, we'll auto-scrape after filling.
-      // But to respect user intent, we'll just fill the textarea.
     });
   </script>
 </body>
