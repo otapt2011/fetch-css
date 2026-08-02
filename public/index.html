@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CSS Scraper</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { font-size: 14px; }
+    .progress-bar { transition: width 0.2s ease; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-2">
+  <div class="w-full max-w-md bg-white rounded-lg shadow p-3 space-y-2">
+    <h1 class="text-base font-semibold text-gray-800">
+      <i class="fa-solid fa-scroll mr-1"></i>CSS Scraper
+    </h1>
+
+    <div class="space-y-1">
+      <label class="block text-xs text-gray-600">CSS file URL</label>
+      <div class="flex gap-1">
+        <input id="urlInput" type="url" placeholder="https://example.com/styles.css"
+               class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400">
+        <button id="fetchBtn" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
+          <i class="fa-solid fa-download mr-1"></i>Fetch
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress bar (hidden initially) -->
+    <div id="progressContainer" class="hidden space-y-1">
+      <div class="flex justify-between text-xs text-gray-500">
+        <span id="progressPercent">0%</span>
+        <span id="progressSize">0 / 0 KB</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-2">
+        <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Download button (hidden initially) -->
+    <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
+      <i class="fa-solid fa-file-arrow-down"></i> Download CSS
+    </a>
+
+    <p id="errorMsg" class="hidden text-xs text-red-600"></p>
+  </div>
+
+  <script>
+    const API = '/api/fetch-css';   // Adjust if your API path differs
+
+    const urlInput = document.getElementById('urlInput');
+    const fetchBtn = document.getElementById('fetchBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressSize = document.getElementById('progressSize');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const errorMsg = document.getElementById('errorMsg');
+
+    let fetchedBlob = null;
+
+    fetchBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+
+      // Reset UI
+      errorMsg.classList.add('hidden');
+      downloadBtn.classList.add('hidden');
+      progressContainer.classList.remove('hidden');
+      setProgress(0, 0, 0);
+
+      try {
+        const response = await fetch(`${API}?url=${encodeURIComponent(url)}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : null;
+        const reader = response.body.getReader();
+
+        const chunks = [];
+        let received = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+
+          if (total) {
+            setProgress(received, total, total);
+          } else {
+            // If total unknown, show indeterminate (just update received size)
+            progressPercent.textContent = '??%';
+            progressSize.textContent = `${formatBytes(received)} / ?`;
+            progressBar.style.width = '50%'; // just a visual trick
+          }
+        }
+
+        // Build blob
+        fetchedBlob = new Blob(chunks, { type: 'text/css' });
+        // Final update
+        const finalSize = fetchedBlob.size;
+        setProgress(finalSize, total || finalSize, total || finalSize);
+
+        // Enable download button
+        downloadBtn.classList.remove('hidden');
+        const blobUrl = URL.createObjectURL(fetchedBlob);
+        downloadBtn.href = blobUrl;
+        downloadBtn.download = getFilenameFromUrl(url) || 'styles.css';
+
+        // Cleanup old object URL on next fetch
+        downloadBtn.addEventListener('click', () => {
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        }, { once: true });
+
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove('hidden');
+        progressContainer.classList.add('hidden');
+      }
+    });
+
+    function setProgress(received, total, displayTotal) {
+      const percent = total ? Math.round((received / total) * 100) : 0;
+      progressPercent.textContent = `${percent}%`;
+      progressSize.textContent = `${formatBytes(received)} / ${formatBytes(displayTotal)}`;
+      progressBar.style.width = `${percent}%`;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      const kb = bytes / 1024;
+      return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
+    }
+
+    function getFilenameFromUrl(url) {
+      try {
+        const path = new URL(url).pathname;
+        return path.substring(path.lastIndexOf('/') + 1) || 'styles.css';
+      } catch {
+        return 'styles.css';
+      }
+    }
+  </script>
+</body>
+</html>
