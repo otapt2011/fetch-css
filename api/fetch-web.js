@@ -1,4 +1,4 @@
-// api/fetch-html.js
+// api/fetch-web.js
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
