@@ -243,35 +243,46 @@
 
     // Common scraping handler
     async function handleScrape(input) {
-      resetUI();
+  resetUI();
+  
+  let lastInfo = null;   // will hold the final progress info
 
-      try {
-        const blob = await CssScraper.scrape(input, {
-          proxyUrl: 'https://fetch-css.vercel.app/api/fetch-css',
-          onProgress: (info) => {
-            setProgress(
-              info.filePercent,
-              info.detail,
-              info.cssIndex,
-              info.cssTotal,
-              info.overallBytes,
-              info.currentFile
-            );
-          }
-        });
-
-        const blobUrl = URL.createObjectURL(blob);
-        downloadBtn.href = blobUrl;
-        downloadBtn.download = 'jCss.zip';
-        downloadBtn.classList.remove('hidden');
-        setProgress(100, 'Complete! Click download.', info?.cssTotal || 1, info?.cssTotal || 1, info?.overallBytes || 0, '');
-        downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
-      } catch (err) {
-        errorMsg.textContent = err.message;
-        errorMsg.classList.remove('hidden');
-        progressContainer.classList.add('hidden');
+  try {
+    const blob = await CssScraper.scrape(input, {
+      proxyUrl: 'https://fetch-css.vercel.app/api/fetch-css',
+      onProgress: (info) => {
+        lastInfo = info;                         // save latest info
+        setProgress(
+          info.filePercent,
+          info.detail,
+          info.cssIndex,
+          info.cssTotal,
+          info.overallBytes,
+          info.currentFile
+        );
       }
-    }
+    });
+
+    const blobUrl = URL.createObjectURL(blob);
+    downloadBtn.href = blobUrl;
+    downloadBtn.download = 'jCss.zip';
+    downloadBtn.classList.remove('hidden');
+    
+    // use the last info we received (the final one)
+    const cssTotal = lastInfo ? lastInfo.cssTotal : 1;
+    const bytes = lastInfo ? lastInfo.overallBytes : 0;
+    setProgress(100, 'Complete! Click download.', cssTotal, cssTotal, bytes, '');
+    
+    downloadBtn.addEventListener('click', () => {
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+    }, { once: true });
+    
+  } catch (err) {
+    errorMsg.textContent = err.message;
+    errorMsg.classList.remove('hidden');
+    progressContainer.classList.add('hidden');
+  }
+}
 
     // Single scrape button
     scrapeSingleBtn.addEventListener('click', async () => {
