@@ -22,18 +22,33 @@ export default async function handler(req, res) {
     if (!headMatch) return '';
     let head = headMatch[1];
 
+    // Remove scripts
     head = head.replace(/<script\b[\s\S]*?<\/script>/gi, '');
+    // Remove unwanted <link> elements
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\balternate\b[^"']*["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\bpreconnect\b[^"']*["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*dns[^"']*["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']script["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']image["'][^>]*\/?>/gi, '');
+    // Remove <base>
     head = head.replace(/<base\b[^>]*\/?>/gi, '');
 
-    // Keep only charset and viewport meta tags
-    head = head.replace(/<meta\b[^>]*(?<!\bcharset\s*=\s*["'][^"']*["'])(?<!\bname\s*=\s*["']viewport["'])[^>]*\/?>/gi, '');
-    head = head.replace(/<meta\b[^>]*?\bproperty\s*=\s*["']og:[^"']*["'][^>]*\/?>/gi, '');
+    // --- Preserve allowed meta tags ---
+    const allowedMeta = [];
+    // Save <meta charset="...">
+    const charsetMeta = head.match(/<meta\b[^>]*\bcharset\s*=\s*["'][^"']*["'][^>]*\/?>/gi);
+    if (charsetMeta) allowedMeta.push(...charsetMeta);
+    // Save <meta name="viewport" ...>
+    const viewportMeta = head.match(/<meta\b[^>]*\bname\s*=\s*["']viewport["'][^>]*\/?>/gi);
+    if (viewportMeta) allowedMeta.push(...viewportMeta);
+    // Remove all meta tags
+    head = head.replace(/<meta\b[^>]*\/?>/gi, '');
+    // Re‑insert allowed meta tags at the beginning of <head>
+    if (allowedMeta.length > 0) {
+      head = allowedMeta.join('\n') + '\n' + head;
+    }
 
+    // Clean up empty lines
     head = head.replace(/^\s*[\r\n]/gm, '');
     return head.trim();
   }
@@ -43,12 +58,10 @@ export default async function handler(req, res) {
     return match ? `<${tag}${match[1]}>` : '';
   }
 
-  // Extract body inner HTML and remove all <script>...</script>
   function cleanBody(html) {
     const bodyMatch = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
     if (!bodyMatch) return '';
     let bodyContent = bodyMatch[1];
-    // Remove script tags
     bodyContent = bodyContent.replace(/<script\b[\s\S]*?<\/script>/gi, '');
     return bodyContent.trim();
   }
@@ -70,6 +83,8 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(200).json(payload);
   } catch (e) {
+    // ... (the rest of the dynamic fallback remains identical)
+    // I'll include it for completeness but it's unchanged
     if (forceDynamic) {
       let browser = null;
       try {
