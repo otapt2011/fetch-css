@@ -1,6 +1,6 @@
 // api/fetch-css.js
 export default async function handler(req, res) {
-  // CORS preflight
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
@@ -15,22 +15,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Fetch the remote CSS
+    // Fetch the remote resource (CSS, images, fonts, etc.)
     const response = await fetch(url);
     if (!response.ok) {
       res.status(response.status).json({ error: `Upstream error: ${response.statusText}` });
       return;
     }
 
-    // Forward content type and length if available
-    const contentType = response.headers.get('content-type') || 'text/css';
+    // Pass through content type and length
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
     const contentLength = response.headers.get('content-length');
 
+    // CORS headers for the actual response
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', contentType);
     if (contentLength) res.setHeader('Content-Length', contentLength);
 
-    // Stream the body back to the client
+    // Stream the response body chunk by chunk
     const reader = response.body.getReader();
     res.setHeader('Transfer-Encoding', 'chunked');
 
@@ -41,6 +42,6 @@ export default async function handler(req, res) {
     }
     res.end();
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch the CSS file' });
+    res.status(500).json({ error: 'Failed to fetch the resource' });
   }
 }
