@@ -31,6 +31,10 @@ export default async function handler(req, res) {
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\balternate\b[^"']*["'][^>]*\/?>/gi, '');
     // Remove <link rel="preconnect" ...>
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\bpreconnect\b[^"']*["'][^>]*\/?>/gi, '');
+    // Remove <link as="script" ...>
+    head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']script["'][^>]*\/?>/gi, '');
+    // Remove <link as="image" ...>
+    head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']image["'][^>]*\/?>/gi, '');
     // Remove <base ...>
     head = head.replace(/<base\b[^>]*\/?>/gi, '');
     // Remove Open Graph <meta property="og:...">
@@ -160,11 +164,9 @@ export default async function handler(req, res) {
       const canonEl = document.querySelector('link[rel="canonical"]');
       const canon = canonEl ? canonEl.href : null;
 
-      // Get html/body opening tags from the document
       const htmlTag = document.documentElement.outerHTML.match(/<html[^>]*>/)?.[0] || '';
       const bodyTag = document.body.outerHTML.match(/<body[^>]*>/)?.[0] || '';
 
-      // Collect DOM <link> stylesheets
       const links = Array.from(document.querySelectorAll('link[rel="stylesheet"], link[as="style"]'));
       const sheets = links.map(l => l.href).filter(h => h);
 
