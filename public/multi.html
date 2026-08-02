@@ -16,14 +16,14 @@
 <body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
   <!-- Header -->
   <header class="bg-white shadow-sm px-3 py-2 flex items-center gap-2 flex-shrink-0">
-  <i class="fa-solid fa-layer-group text-blue-600 text-lg"></i>
-  <h1 class="text-base font-semibold text-gray-800">Multi CSS Scraper</h1>
-  <a href="index.html" class="ml-auto text-xs text-blue-600 hover:text-blue-800 transition">
-    <i class="fa-solid fa-arrow-left mr-1"></i>Single
-  </a>
-</header>
+    <i class="fa-solid fa-layer-group text-blue-600 text-lg"></i>
+    <h1 class="text-base font-semibold text-gray-800">Multi CSS Scraper</h1>
+    <a href="index.html" class="ml-auto text-xs text-blue-600 hover:text-blue-800 transition">
+      <i class="fa-solid fa-arrow-left mr-1"></i>Single
+    </a>
+  </header>
 
-  <!-- Main (scrollable) -->
+  <!-- Main -->
   <main class="flex-1 overflow-y-auto p-2 flex items-start justify-center">
     <div class="w-full max-w-md space-y-2 mt-2">
       <div class="space-y-1">
@@ -35,16 +35,25 @@
         </button>
       </div>
 
-      <!-- Progress -->
-      <div id="progressContainer" class="hidden space-y-1">
-        <div class="flex justify-between text-xs text-gray-500">
-          <span id="progressPercent">0%</span>
-          <span id="progressSize">0 / 0 KB</span>
+      <!-- Overall Progress -->
+      <div id="progressContainer" class="hidden space-y-2">
+        <!-- Overall counter -->
+        <div class="flex justify-between text-xs text-gray-600">
+          <span id="overallCount">CSS 0/0</span>
+          <span id="overallSize">0 KB</span>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-2">
-          <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+
+        <!-- Current file progress -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs text-gray-500">
+            <span id="currentPercent">0%</span>
+            <span id="currentFile">—</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2">
+            <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
         </div>
-        <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
       </div>
 
       <!-- Download button -->
@@ -64,7 +73,6 @@
   <script>
     const PROXY = 'https://fetch-css.vercel.app/api/fetch-css';
 
-    // Category detection (same as single scraper)
     const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'tiff']);
     const fontExtensions = new Set(['woff', 'woff2', 'ttf', 'otf', 'eot']);
 
@@ -80,12 +88,35 @@
     const fetchBtn = document.getElementById('fetchBtn');
     const progressContainer = document.getElementById('progressContainer');
     const progressBar = document.getElementById('progressBar');
-    const progressPercent = document.getElementById('progressPercent');
-    const progressSize = document.getElementById('progressSize');
+    const currentPercent = document.getElementById('currentPercent');
+    const currentFile = document.getElementById('currentFile');
     const progressDetail = document.getElementById('progressDetail');
+    const overallCount = document.getElementById('overallCount');
+    const overallSize = document.getElementById('overallSize');
     const downloadBtn = document.getElementById('downloadBtn');
     const errorMsg = document.getElementById('errorMsg');
 
+    // Helper to update current file progress bar
+    function setCurrentProgress(percent, detailText) {
+      currentPercent.textContent = `${Math.round(percent)}%`;
+      progressBar.style.width = `${percent}%`;
+      if (detailText) progressDetail.textContent = detailText;
+    }
+
+    // Update overall text
+    function setOverall(current, total, totalBytes) {
+      overallCount.textContent = `CSS ${current}/${total}`;
+      overallSize.textContent = formatBytes(totalBytes);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      const kb = bytes / 1024;
+      return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
+    }
+
+    // Main scrape function
     fetchBtn.addEventListener('click', async () => {
       let urls;
       try {
@@ -97,173 +128,195 @@
         return;
       }
 
-      // Reset UI
       errorMsg.classList.add('hidden');
       downloadBtn.classList.add('hidden');
       progressContainer.classList.remove('hidden');
-      setProgress(0, 0, 0, 'Starting...');
+
+      // Reset progress UI
+      setOverall(0, urls.length, 0);
+      setCurrentProgress(0, 'Starting...');
+      currentFile.textContent = '—';
+
+      let totalBytesDownloaded = 0;
+
+      // Global asset cache: absoluteUrl -> { localName, category, blob? (only if downloaded) }
+      const globalAssets = new Map();
+
+      // We'll store the rewritten CSS contents and their filenames
+      const cssFiles = [];
 
       try {
-        // ---------------- 1. Fetch all CSS files ----------------
-        const cssData = []; // { url, text, baseUrl }
-        let downloadedBytes = 0;
-        const totalSteps = urls.length;
-
         for (let i = 0; i < urls.length; i++) {
           const url = urls[i].trim();
-          progressDetail.textContent = `Fetching CSS ${i+1}/${totalSteps}: ${url}`;
-          const resp = await fetch(`${PROXY}?url=${encodeURIComponent(url)}`);
-          if (!resp.ok) {
-            const err = await resp.json().catch(() => ({}));
-            throw new Error(`Failed to fetch ${url}: ${err.error || resp.statusText}`);
+          currentFile.textContent = url.substring(url.lastIndexOf('/') + 1) || 'style.css';
+          setOverall(i + 1, urls.length, totalBytesDownloaded);
+
+          // ----- 1. Fetch CSS -----
+          setCurrentProgress(0, 'Downloading CSS...');
+          const cssResp = await fetch(`${PROXY}?url=${encodeURIComponent(url)}`);
+          if (!cssResp.ok) {
+            const err = await cssResp.json().catch(() => ({}));
+            throw new Error(`Failed to fetch ${url}: ${err.error || cssResp.statusText}`);
           }
-          const text = await resp.text();
-          downloadedBytes += new Blob([text]).size;
+          const originalCss = await cssResp.text();
+          const cssSize = new Blob([originalCss]).size;
+          totalBytesDownloaded += cssSize;
+          setOverall(i + 1, urls.length, totalBytesDownloaded);
+          setCurrentProgress(10, 'CSS fetched. Analyzing assets...');
+
+          // ----- 2. Find all assets in this CSS -----
+          const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
+          const matches = [...originalCss.matchAll(urlRegex)];
           const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
-          cssData.push({ url, text, baseUrl });
-          setProgress(0, 0, downloadedBytes, `Fetched CSS ${i+1}/${totalSteps}`);
-        }
 
-        // ---------------- 2. Collect all asset references ----------------
-        // Global map: absoluteUrl -> { localName, category }
-        const globalAssetMap = new Map();
-        // For each CSS file, we record an array of replacements: { start, end, newLocalPath }
-        const cssReplacements = cssData.map(() => []);
+          // Collect assets unique to this file (but still check global)
+          const fileAssets = new Map(); // absoluteUrl -> { matchStart, matchEnd, originalMatch }
+          // We'll also need to know the local path for rewriting
 
-        const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
-
-        cssData.forEach((css, index) => {
-          const { text, baseUrl } = css;
-          const matches = [...text.matchAll(urlRegex)];
-
-          matches.forEach(match => {
+          for (const match of matches) {
             let rawPath = match[1].trim().replace(/^["']|["']$/g, '');
-            // Skip absolute
-            if (rawPath.startsWith('http://') || rawPath.startsWith('https://') || rawPath.startsWith('//')) return;
-
+            if (rawPath.startsWith('http://') || rawPath.startsWith('https://') || rawPath.startsWith('//')) continue;
             try {
               const absoluteUrl = new URL(rawPath, baseUrl).href;
-
-              // Ensure global unique localName + category
-              if (!globalAssetMap.has(absoluteUrl)) {
-                let filename = absoluteUrl.substring(absoluteUrl.lastIndexOf('/') + 1);
-                const qIndex = filename.indexOf('?');
-                if (qIndex !== -1) filename = filename.substring(0, qIndex);
-                if (!filename) filename = 'asset';
-
-                let unique = filename;
-                let counter = 1;
-                const used = new Set(Array.from(globalAssetMap.values()).map(v => v.localName));
-                while (used.has(unique)) {
-                  const dot = filename.lastIndexOf('.');
-                  unique = dot !== -1
-                    ? filename.substring(0, dot) + `_${counter}` + filename.substring(dot)
-                    : filename + `_${counter}`;
-                  counter++;
+              if (!fileAssets.has(absoluteUrl)) {
+                // Global asset registration
+                if (!globalAssets.has(absoluteUrl)) {
+                  let filename = absoluteUrl.substring(absoluteUrl.lastIndexOf('/') + 1);
+                  const qIdx = filename.indexOf('?');
+                  if (qIdx !== -1) filename = filename.substring(0, qIdx);
+                  if (!filename) filename = 'asset';
+                  let unique = filename;
+                  const usedNames = new Set(Array.from(globalAssets.values()).map(v => v.localName));
+                  let counter = 1;
+                  while (usedNames.has(unique)) {
+                    const dot = filename.lastIndexOf('.');
+                    unique = dot !== -1
+                      ? filename.substring(0, dot) + `_${counter}` + filename.substring(dot)
+                      : filename + `_${counter}`;
+                    counter++;
+                  }
+                  globalAssets.set(absoluteUrl, {
+                    localName: unique,
+                    category: getCategory(filename),
+                    blob: null   // not downloaded yet
+                  });
                 }
-                globalAssetMap.set(absoluteUrl, {
-                  localName: unique,
-                  category: getCategory(filename)
+                // Record match for later rewriting
+                fileAssets.set(absoluteUrl, {
+                  start: match.index,
+                  end: match.index + match[0].length,
+                  originalMatch: match[0]
                 });
               }
-
-              // Save replacement info for this CSS file
-              const { localName, category } = globalAssetMap.get(absoluteUrl);
-              cssReplacements[index].push({
-                start: match.index,
-                end: match.index + match[0].length,
-                originalMatch: match[0],
-                newLocalPath: `${category}/${localName}`
-              });
             } catch (e) { /* ignore */ }
-          });
-        });
-
-        // ---------------- 3. Download all unique assets ----------------
-        const assetEntries = Array.from(globalAssetMap.entries());
-        // Array to hold downloaded blobs: { localName, category, blob }
-        const downloadedAssets = [];
-
-        for (let i = 0; i < assetEntries.length; i++) {
-          const [assetUrl, { localName, category }] = assetEntries[i];
-          progressDetail.textContent = `Asset ${i+1}/${assetEntries.length}: ${localName}`;
-          try {
-            const assetResp = await fetch(`${PROXY}?url=${encodeURIComponent(assetUrl)}`);
-            if (!assetResp.ok) continue;
-            const reader = assetResp.body.getReader();
-            const chunks = [];
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              chunks.push(value);
-              downloadedBytes += value.length;
-              setProgress(0, 0, downloadedBytes,
-                `Asset ${i+1}/${assetEntries.length}: ${localName}`);
-            }
-            downloadedAssets.push({ localName, category, blob: new Blob(chunks) });
-          } catch (e) {
-            console.warn(`Skipped ${assetUrl}: ${e.message}`);
           }
-        }
 
-        // ---------------- 4. Rewrite each CSS and build zip ----------------
-        progressDetail.textContent = 'Building zip...';
-        const zip = new JSZip();
+          // ----- 3. Download assets for this CSS (those not yet downloaded) -----
+          const assetsNeeded = Array.from(fileAssets.keys()).filter(
+            absUrl => !globalAssets.get(absUrl).blob
+          );
 
-        // Keep track of used CSS filenames to avoid collisions at root
-        const usedCssNames = new Set();
+          const totalAssets = assetsNeeded.length;
+          if (totalAssets > 0) {
+            let assetBytes = 0;
+            for (let j = 0; j < assetsNeeded.length; j++) {
+              const assetUrl = assetsNeeded[j];
+              const info = globalAssets.get(assetUrl);
+              setCurrentProgress(10 + 80 * (j / totalAssets),
+                `Downloading asset ${j+1}/${totalAssets}: ${info.localName}`);
 
-        cssData.forEach((css, idx) => {
-          // Generate unique CSS filename
-          let cssFilename = css.url.substring(css.url.lastIndexOf('/') + 1);
+              try {
+                const assetResp = await fetch(`${PROXY}?url=${encodeURIComponent(assetUrl)}`);
+                if (!assetResp.ok) continue;
+                const reader = assetResp.body.getReader();
+                const chunks = [];
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  chunks.push(value);
+                  assetBytes += value.length;
+                }
+                const blob = new Blob(chunks);
+                totalBytesDownloaded += blob.size;
+                globalAssets.get(assetUrl).blob = blob;
+                setOverall(i + 1, urls.length, totalBytesDownloaded);
+              } catch (e) {
+                console.warn(`Skipped ${assetUrl}: ${e.message}`);
+              }
+            }
+          }
+
+          // ----- 4. Rewrite CSS with local paths -----
+          setCurrentProgress(90, 'Rewriting CSS...');
+          let rewritten = originalCss;
+          // Sort replacements in reverse order to keep indices
+          const replacements = [];
+          for (const [absUrl, { start, end, originalMatch }] of fileAssets) {
+            const info = globalAssets.get(absUrl);
+            if (!info.blob) continue; // asset failed, skip rewrite
+            const localPath = `${info.category}/${info.localName}`;
+            replacements.push({ start, end, originalMatch, localPath });
+          }
+          replacements.sort((a, b) => b.start - a.start);
+          for (const { start, end, originalMatch, localPath } of replacements) {
+            const hasQuotes = /url\(\s*["']/.test(originalMatch);
+            const newUrl = hasQuotes ? `url("${localPath}")` : `url(${localPath})`;
+            rewritten = rewritten.substring(0, start) + newUrl + rewritten.substring(end);
+          }
+
+          // Determine unique CSS filename
+          const parsedUrl = new URL(url);
+          let cssFilename = parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf('/') + 1);
+          if (!cssFilename) cssFilename = 'style.css';
           const qIdx = cssFilename.indexOf('?');
           if (qIdx !== -1) cssFilename = cssFilename.substring(0, qIdx);
-          if (!cssFilename) cssFilename = 'style.css';
-
-          let uniqueCssName = cssFilename;
+          // Ensure unique name across all CSS files
+          const usedNames = new Set(cssFiles.map(f => f.filename));
+          let uniqueName = cssFilename;
           let counter = 1;
-          while (usedCssNames.has(uniqueCssName)) {
+          while (usedNames.has(uniqueName)) {
             const dot = cssFilename.lastIndexOf('.');
-            uniqueCssName = dot !== -1
+            uniqueName = dot !== -1
               ? cssFilename.substring(0, dot) + `_${counter}` + cssFilename.substring(dot)
               : cssFilename + `_${counter}`;
             counter++;
           }
-          usedCssNames.add(uniqueCssName);
+          cssFiles.push({ filename: uniqueName, content: rewritten });
+          setCurrentProgress(100, `Done (${formatBytes(new Blob([rewritten]).size)})`);
+        }
 
-          // Rewrite CSS text with local paths
-          let rewritten = css.text;
-          // Process replacements in reverse order to keep indices valid
-          const replacements = cssReplacements[idx].sort((a, b) => b.start - a.start);
-          replacements.forEach(({ start, end, originalMatch, newLocalPath }) => {
-            // Preserve quotes if present
-            const hasQuotes = /url\(\s*["']/.test(originalMatch);
-            const newUrl = hasQuotes ? `url("${newLocalPath}")` : `url(${newLocalPath})`;
-            rewritten = rewritten.substring(0, start) + newUrl + rewritten.substring(end);
-          });
+        // ----- 5. Build ZIP -----
+        progressDetail.textContent = 'Building zip...';
+        setCurrentProgress(0, 'Compressing...');
+        const zip = new JSZip();
 
-          zip.file(uniqueCssName, rewritten);
-        });
+        // Add CSS files
+        for (const { filename, content } of cssFiles) {
+          zip.file(filename, content);
+        }
 
-        // Add all assets to their category folders
-        downloadedAssets.forEach(({ localName, category, blob }) => {
-          zip.folder(category).file(localName, blob);
-        });
+        // Add downloaded assets into their folders
+        for (const [absUrl, { localName, category, blob }] of globalAssets) {
+          if (blob) {
+            zip.folder(category).file(localName, blob);
+          }
+        }
 
-        // Generate zip with progress
         const zipBlob = await zip.generateAsync({ type: 'blob' }, meta => {
-          setProgress(meta.percent, 100, downloadedBytes,
-            `Compressing... ${meta.percent.toFixed(0)}%`);
+          setCurrentProgress(meta.percent, `Compressing... ${meta.percent.toFixed(0)}%`);
         });
 
-        // ---------------- 5. Trigger download ----------------
+        // ----- 6. Enable download -----
         const blobUrl = URL.createObjectURL(zipBlob);
         downloadBtn.href = blobUrl;
         downloadBtn.download = 'jCss.zip';
         downloadBtn.classList.remove('hidden');
-        progressDetail.textContent = 'Done! Click to download.';
-        setProgress(100, 100, downloadedBytes, 'Complete');
-        downloadBtn.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(blobUrl), 2000), { once: true });
+        setCurrentProgress(100, 'Complete! Click download.');
+        overallCount.textContent = `CSS ${urls.length}/${urls.length}`;
+
+        downloadBtn.addEventListener('click', () => {
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+        }, { once: true });
 
       } catch (err) {
         errorMsg.textContent = err.message;
@@ -271,21 +324,6 @@
         progressContainer.classList.add('hidden');
       }
     });
-
-    function setProgress(value, max, bytes, text) {
-      const pct = max ? Math.round((value / max) * 100) : 0;
-      progressPercent.textContent = max ? `${pct}%` : '...';
-      progressSize.textContent = formatBytes(bytes);
-      progressBar.style.width = max ? `${pct}%` : '50%';
-      if (text) progressDetail.textContent = text;
-    }
-
-    function formatBytes(bytes) {
-      if (bytes === 0) return '0 B';
-      if (bytes < 1024) return bytes + ' B';
-      const kb = bytes / 1024;
-      return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
-    }
   </script>
 </body>
 </html>
