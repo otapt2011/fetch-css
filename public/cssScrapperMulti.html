@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Multi CSS Scraper</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- JSZip (required by the external module) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- External multi-scraper module -->
+  <script src="js/cssScrapperMulti.js"></script>
+  <style>
+    body { font-size: 14px; }
+    .progress-bar { transition: width 0.1s linear; }
+    textarea { resize: vertical; }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+  <!-- Header -->
+  <header class="bg-white shadow-sm px-3 py-2 flex items-center gap-2 flex-shrink-0">
+    <i class="fa-solid fa-layer-group text-blue-600 text-lg"></i>
+    <h1 class="text-base font-semibold text-gray-800">Multi CSS Scraper</h1>
+    <a href="cssScrapperSingle.html" class="ml-auto text-xs text-blue-600 hover:text-blue-800 transition">
+      <i class="fa-solid fa-arrow-left mr-1"></i>Single
+    </a>
+  </header>
+
+  <!-- Main -->
+  <main class="flex-1 overflow-y-auto p-2 flex items-start justify-center">
+    <div class="w-full max-w-md space-y-2 mt-2">
+      <div class="space-y-1">
+        <label class="block text-xs text-gray-600">JSON array of CSS URLs</label>
+        <textarea id="jsonInput" rows="5" placeholder='["https://example.com/a.css", "https://example.com/b.css"]'
+                  class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"></textarea>
+        <div class="flex gap-1">
+          <button id="sampleBtn" class="flex-1 px-3 py-1.5 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700 transition">
+            <i class="fa-solid fa-flask mr-1"></i>Scrape Sample
+          </button>
+          <button id="scrapeBtn" class="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
+            <i class="fa-solid fa-download mr-1"></i>Scrape All
+          </button>
+        </div>
+      </div>
+
+      <!-- Overall + current progress -->
+      <div id="progressContainer" class="hidden space-y-2">
+        <div class="flex justify-between text-xs text-gray-600">
+          <span id="overallCount">CSS 0/0</span>
+          <span id="overallSize">0 KB</span>
+        </div>
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs text-gray-500">
+            <span id="currentPercent">0%</span>
+            <span id="currentFile">—</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2">
+            <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
+        </div>
+      </div>
+
+      <!-- Download button -->
+      <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
+        <i class="fa-solid fa-file-zipper"></i> Download jCss.zip
+      </a>
+
+      <p id="errorMsg" class="hidden text-xs text-red-600"></p>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t px-3 py-1.5 flex-shrink-0 text-xs text-gray-500 text-center">
+    <i class="fa-regular fa-copyright"></i> Multi CSS Scraper Tool
+  </footer>
+
+  <!-- ======================== SAMPLE DATA ======================== -->
+  <script>
+    // Predefined sample CSS URLs (same as before)
+    window.SAMPLE_URLS = [
+      "https://static.cdn.seaart.me/h5/prod/css/element-ui.fe785c75.225a6b445dee.css",
+      "https://static.cdn.seaart.me/h5/prod/css/vendors.app.8a6c828a.d4dd2953ee7a.css",
+      "https://static.cdn.seaart.me/h5/prod/css/vendors.app.1f20a385.29c8159c09b8.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.24120820.c207d552c785.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.748942c6.930a0867e0e6.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.d8770354.20c673cc3516.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.a97bfcba.b47e3eb732cd.css",
+      "https://static.cdn.seaart.me/h5/prod/css/app.5a11b65b.8cabe185f287.css",
+      "https://static.cdn.seaart.me/h5/prod/css/banner.b02c76f4.7706004649f8.css",
+      "https://static.cdn.seaart.me/h5/prod/css/view/FastTools/index.31ecd969.a79c9024eae7.css",
+      "https://static.cdn.seaart.me/h5/prod/css/view/FastTools/HdRepair/index.f71cff67.a32b9447411c.css",
+      "https://static.cdn.seaart.me/h5/prod/css/8.afd444f404ed.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1176.bc48c75fc44a.css",
+      "https://static.cdn.seaart.me/h5/prod/css/931.f2d4c9a192c8.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1184.292da8110c95.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1185.34970a81839c.css",
+      "https://static.cdn.seaart.me/h5/prod/css/lang-dialog.8bb3d535.18d0a14f0e68.css",
+      "https://static.cdn.seaart.me/h5/prod/css/notice-dialog.4d6052e8.96f48c861004.css",
+      "https://static.cdn.seaart.me/h5/prod/css/31.0f529e4a710d.css",
+      "https://static.cdn.seaart.me/h5/prod/css/41.f324a2930b35.css",
+      "https://static.cdn.seaart.me/h5/prod/css/40.dbb836acb6e8.css",
+      "https://static.cdn.seaart.me/h5/prod/css/55.175d216efe11.css",
+      "https://static.cdn.seaart.me/h5/prod/css/78.a729218a365c.css",
+      "https://static.cdn.seaart.me/h5/prod/css/76.88a0eb784c96.css",
+      "https://static.cdn.seaart.me/h5/prod/css/77.44a6d9975ae3.css",
+      "https://static.cdn.seaart.me/h5/prod/css/GeneratePopup.components/simple-generate.21833f8f.0440ad605f21.css",
+      "https://static.cdn.seaart.me/h5/prod/css/GeneratePopup.31ecd969.4f335747028e.css",
+      "https://static.cdn.seaart.me/h5/prod/css/vendors.EasyGenerate.253ae210.6773e83280e6.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1.538fe6ffb6a0.css",
+      "https://static.cdn.seaart.me/h5/prod/css/2.3721933cac8d.css",
+      "https://static.cdn.seaart.me/h5/prod/css/3.8fd6f55f101f.css",
+      "https://static.cdn.seaart.me/h5/prod/css/4.e47023b3b600.css",
+      "https://static.cdn.seaart.me/h5/prod/css/6.8a5e07483c4d.css",
+      "https://static.cdn.seaart.me/h5/prod/css/5.2529a598ad3e.css",
+      "https://static.cdn.seaart.me/h5/prod/css/9.33e1d7d6acb0.css",
+      "https://static.cdn.seaart.me/h5/prod/css/12.ff51db95dee2.css",
+      "https://static.cdn.seaart.me/h5/prod/css/13.873a86aab33e.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.f71cff67.5bea31380978.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.21833f8f.c397317267dc.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.b59217a9.ed658cf302ce.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.739de0d0.a2cf8b904ccf.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.f0f121c6.768431ad947b.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.34acf0f1.d863b0cd62c9.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.aefb9243.9f504a7005f4.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.0008081f.20d5edc9a32b.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.b4b17a97.2aca7a3c9ea2.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.deb7d3b8.62ba616808cf.css",
+      "https://static.cdn.seaart.me/h5/prod/css/EasyGenerate.127ae097.aa750c938eaa.css",
+      "https://static.cdn.seaart.me/h5/prod/css/23.32e1b3195825.css",
+      "https://static.cdn.seaart.me/h5/prod/css/payment.31ecd969.a46dbfd55065.css",
+      "https://static.cdn.seaart.me/h5/prod/css/463.4f1ce2823ccb.css",
+      "https://static.cdn.seaart.me/h5/prod/css/feature.f72e9571.bce2bfe0fbaf.css",
+      "https://static.cdn.seaart.me/h5/prod/css/trick-dialog.680d1ef8.74c4a21f2778.css",
+      "https://static.cdn.seaart.me/h5/prod/css/components/app-extend-box.21833f8f.7e868afc6a95.css",
+      "https://static.cdn.seaart.me/h5/prod/css/battle-pass.31ecd969.40106d9fa4c4.css",
+      "https://static.cdn.seaart.me/h5/prod/css/932.7f17ff5e0132.css",
+      "https://static.cdn.seaart.me/h5/prod/css/1180.ba3f7686994b.css",
+      "https://static.cdn.seaart.me/h5/prod/css/ActivationDialogInPage.5764b6ac.d9a41a223e4f.css",
+      "https://static.cdn.seaart.me/h5/prod/css/ImageDetailPop.1e5feb00.2447b59d15ae.css",
+      "https://cdn.jsdelivr.net/npm/@adyen/adyen-web@latest/dist/adyen.css"
+    ];
+  </script>
+
+  <!-- ======================== UI CONTROLLER ======================== -->
+  <script>
+    // DOM elements
+    const jsonInput = document.getElementById('jsonInput');
+    const scrapeBtn = document.getElementById('scrapeBtn');
+    const sampleBtn = document.getElementById('sampleBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const currentPercent = document.getElementById('currentPercent');
+    const currentFile = document.getElementById('currentFile');
+    const progressDetail = document.getElementById('progressDetail');
+    const overallCount = document.getElementById('overallCount');
+    const overallSize = document.getElementById('overallSize');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const errorMsg = document.getElementById('errorMsg');
+
+    // Helper to update per-file progress bar
+    function setCurrentProgress(percent, detailText) {
+      currentPercent.textContent = `${Math.round(percent)}%`;
+      progressBar.style.width = `${percent}%`;
+      if (detailText) progressDetail.textContent = detailText;
+    }
+
+    // Helper to update overall counter and size
+    function setOverall(current, total, totalBytes) {
+      overallCount.textContent = `CSS ${current}/${total}`;
+      overallSize.textContent = formatBytes(totalBytes);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      const kb = bytes / 1024;
+      return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
+    }
+
+    // Generic handler for both buttons
+    async function handleScrape(urls) {
+      errorMsg.classList.add('hidden');
+      downloadBtn.classList.add('hidden');
+      progressContainer.classList.remove('hidden');
+      setOverall(0, urls.length, 0);
+      setCurrentProgress(0, 'Starting...');
+      currentFile.textContent = '—';
+
+      try {
+        const blob = await CssScraperMulti.scrape(urls, {
+          proxyUrl: 'https://fetch-css.vercel.app/api/fetch-css',
+          onProgress: (info) => {
+            // info = { overallPercent, filePercent, detail, overallBytes,
+            //          currentFile, cssIndex, cssTotal }
+            // Update per-file progress
+            setCurrentProgress(info.filePercent, info.detail);
+            // Update current file name display
+            if (info.currentFile) currentFile.textContent = info.currentFile;
+            // Update overall bytes
+            overallSize.textContent = formatBytes(info.overallBytes);
+            // Update overall counter (cssIndex / cssTotal)
+            overallCount.textContent = `CSS ${info.cssIndex}/${info.cssTotal}`;
+          }
+        });
+
+        // Enable download
+        const blobUrl = URL.createObjectURL(blob);
+        downloadBtn.href = blobUrl;
+        downloadBtn.download = 'jCss.zip';
+        downloadBtn.classList.remove('hidden');
+        setCurrentProgress(100, 'Complete! Click download.');
+        overallCount.textContent = `CSS ${urls.length}/${urls.length}`;
+
+        // Clean up object URL after download
+        downloadBtn.addEventListener('click', () => {
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+        }, { once: true });
+
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove('hidden');
+        progressContainer.classList.add('hidden');
+      }
+    }
+
+    // "Scrape All" button – parse JSON from textarea
+    scrapeBtn.addEventListener('click', async () => {
+      let urls;
+      try {
+        urls = JSON.parse(jsonInput.value.trim());
+        if (!Array.isArray(urls) || urls.length === 0) throw new Error('Invalid array');
+      } catch {
+        errorMsg.textContent = 'Invalid JSON array. Example: ["url1.css", "url2.css"]';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+      await handleScrape(urls);
+    });
+
+    // "Scrape Sample" button – use predefined SAMPLE_URLS
+    sampleBtn.addEventListener('click', async () => {
+      await handleScrape(window.SAMPLE_URLS);
+    });
+  </script>
+</body>
+</html>
