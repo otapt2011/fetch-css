@@ -3,34 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CSS Scraper</title>
-  <!-- Tailwind CDN -->
+  <title>CSS Scraper + Assets</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Awesome CDN -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     body { font-size: 14px; }
-    .progress-bar { transition: width 0.2s ease; }
+    .progress-bar { transition: width 0.15s ease; }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-2">
   <div class="w-full max-w-md bg-white rounded-lg shadow p-3 space-y-2">
     <h1 class="text-base font-semibold text-gray-800">
-      <i class="fa-solid fa-scroll mr-1"></i>CSS Scraper
+      <i class="fa-solid fa-scroll mr-1"></i>CSS Scraper + Assets
     </h1>
 
     <div class="space-y-1">
       <label class="block text-xs text-gray-600">CSS file URL</label>
       <div class="flex gap-1">
-        <input id="urlInput" type="url" placeholder="https://example.com/styles.css"
+        <input id="urlInput" type="url" placeholder="https://example.com/style.css"
                class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400">
         <button id="fetchBtn" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">
-          <i class="fa-solid fa-download mr-1"></i>Fetch
+          <i class="fa-solid fa-download mr-1"></i>Scrape
         </button>
       </div>
     </div>
 
-    <!-- Progress bar (hidden initially) -->
+    <!-- Progress area -->
     <div id="progressContainer" class="hidden space-y-1">
       <div class="flex justify-between text-xs text-gray-500">
         <span id="progressPercent">0%</span>
@@ -39,18 +38,19 @@
       <div class="w-full bg-gray-200 rounded-full h-2">
         <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
       </div>
+      <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
     </div>
 
     <!-- Download button (hidden initially) -->
     <a id="downloadBtn" class="hidden w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">
-      <i class="fa-solid fa-file-arrow-down"></i> Download CSS
+      <i class="fa-solid fa-file-zipper"></i> Download jCss.zip
     </a>
 
     <p id="errorMsg" class="hidden text-xs text-red-600"></p>
   </div>
 
   <script>
-    const API = '/api/fetch-css';   // Adjust if your API path differs
+    const PROXY = '/api/fetch-css';   // adjust if needed
 
     const urlInput = document.getElementById('urlInput');
     const fetchBtn = document.getElementById('fetchBtn');
@@ -58,10 +58,9 @@
     const progressBar = document.getElementById('progressBar');
     const progressPercent = document.getElementById('progressPercent');
     const progressSize = document.getElementById('progressSize');
+    const progressDetail = document.getElementById('progressDetail');
     const downloadBtn = document.getElementById('downloadBtn');
     const errorMsg = document.getElementById('errorMsg');
-
-    let fetchedBlob = null;
 
     fetchBtn.addEventListener('click', async () => {
       const url = urlInput.value.trim();
@@ -71,53 +70,137 @@
       errorMsg.classList.add('hidden');
       downloadBtn.classList.add('hidden');
       progressContainer.classList.remove('hidden');
-      setProgress(0, 0, 0);
+      setProgress(0, 0, 0, 'Fetching CSS...');
 
       try {
-        const response = await fetch(`${API}?url=${encodeURIComponent(url)}`);
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.error || `HTTP ${response.status}`);
+        // 1. Fetch the CSS text via proxy
+        const cssResponse = await fetch(`${PROXY}?url=${encodeURIComponent(url)}`);
+        if (!cssResponse.ok) {
+          const err = await cssResponse.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${cssResponse.status}`);
         }
+        const cssText = await cssResponse.text();
+        const cssByteLength = new Blob([cssText]).size;
 
-        const contentLength = response.headers.get('content-length');
-        const total = contentLength ? parseInt(contentLength, 10) : null;
-        const reader = response.body.getReader();
+        // 2. Parse CSS for url() references (exclude data: and absolute http(s)://)
+        const urlRegex = /url\(\s*["']?(?!data:)([^"')]+)["']?\s*\)/gi;
+        const rawMatches = [...cssText.matchAll(urlRegex)];
 
-        const chunks = [];
-        let received = 0;
+        // Resolve relative URLs
+        const cssBaseUrl = url.substring(0, url.lastIndexOf('/') + 1); // e.g., ends with /
+        const resolvedUrls = new Map(); // absoluteUrl -> filename in images/
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.length;
+        rawMatches.forEach(match => {
+          let relativePath = match[1].trim();
+          // Remove possible leading/trailing quotes
+          relativePath = relativePath.replace(/^["']|["']$/g, '');
+          // Skip if already absolute
+          if (relativePath.startsWith('http://') || relativePath.startsWith('https://') || relativePath.startsWith('//')) return;
+          try {
+            const absoluteUrl = new URL(relativePath, cssBaseUrl).href;
+            if (!resolvedUrls.has(absoluteUrl)) {
+              // Create a unique filename inside images/
+              let filename = absoluteUrl.substring(absoluteUrl.lastIndexOf('/') + 1);
+              // Remove query string from filename
+              const qIndex = filename.indexOf('?');
+              if (qIndex !== -1) filename = filename.substring(0, qIndex);
+              // Avoid empty filenames
+              if (!filename) filename = 'asset';
+              // Add counter if duplicate filename
+              let uniqueName = filename;
+              let counter = 1;
+              const existingNames = new Set(resolvedUrls.values());
+              while (existingNames.has(uniqueName)) {
+                const dotIndex = filename.lastIndexOf('.');
+                if (dotIndex !== -1) {
+                  uniqueName = filename.substring(0, dotIndex) + `_${counter}` + filename.substring(dotIndex);
+                } else {
+                  uniqueName = filename + `_${counter}`;
+                }
+                counter++;
+              }
+              resolvedUrls.set(absoluteUrl, uniqueName);
+            }
+          } catch (e) {
+            // ignore malformed
+          }
+        });
 
-          if (total) {
-            setProgress(received, total, total);
-          } else {
-            // If total unknown, show indeterminate (just update received size)
-            progressPercent.textContent = '??%';
-            progressSize.textContent = `${formatBytes(received)} / ?`;
-            progressBar.style.width = '50%'; // just a visual trick
+        const assetEntries = Array.from(resolvedUrls.entries()); // [absoluteUrl, localFilename]
+
+        // 3. Calculate total download size if possible (using HEAD requests is optional, we skip for simplicity)
+        // We'll track progress as we download each asset.
+        const totalAssets = assetEntries.length;
+        let downloadedBytes = cssByteLength;
+        const totalBytesUnknown = true; // we'll show cumulative bytes without percentage if unknown
+
+        // Update progress with CSS size
+        setProgress(0, 0, downloadedBytes, `Fetched CSS (${formatBytes(cssByteLength)})`);
+
+        // 4. Download all assets via proxy, tracking progress
+        const zip = new JSZip();
+        // Add CSS file to zip root
+        const cssFilename = url.substring(url.lastIndexOf('/') + 1) || 'style.css';
+        zip.file(cssFilename, cssText);
+
+        const imageFolder = zip.folder("images");
+
+        for (let i = 0; i < assetEntries.length; i++) {
+          const [assetUrl, localName] = assetEntries[i];
+          progressDetail.textContent = `Downloading asset ${i+1}/${totalAssets}: ${localName}`;
+
+          try {
+            const assetResponse = await fetch(`${PROXY}?url=${encodeURIComponent(assetUrl)}`);
+            if (!assetResponse.ok) {
+              console.warn(`Failed to fetch ${assetUrl}`);
+              continue;
+            }
+
+            // Stream the asset while accumulating bytes
+            const reader = assetResponse.body.getReader();
+            const chunks = [];
+            let received = 0;
+            const contentLength = assetResponse.headers.get('content-length');
+            const assetTotal = contentLength ? parseInt(contentLength, 10) : null;
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              received += value.length;
+              downloadedBytes += value.length;
+
+              // Update progress (we don't know overall total, so show just received bytes)
+              setProgress(0, 0, downloadedBytes,
+                `Asset ${i+1}/${totalAssets}: ${localName} (${formatBytes(received)}${assetTotal ? ' / ' + formatBytes(assetTotal) : ''})`);
+            }
+
+            const blob = new Blob(chunks);
+            imageFolder.file(localName, blob);
+          } catch (e) {
+            console.warn(`Skipped ${assetUrl}: ${e.message}`);
           }
         }
 
-        // Build blob
-        fetchedBlob = new Blob(chunks, { type: 'text/css' });
-        // Final update
-        const finalSize = fetchedBlob.size;
-        setProgress(finalSize, total || finalSize, total || finalSize);
+        // 5. Generate zip
+        progressDetail.textContent = 'Building zip...';
+        setProgress(0, 0, downloadedBytes, 'Building zip...');
+        const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+          // metadata.percent gives overall compression progress
+          setProgress(metadata.percent, 100, downloadedBytes,
+            `Compressing... ${metadata.percent.toFixed(0)}%`);
+        });
 
-        // Enable download button
-        downloadBtn.classList.remove('hidden');
-        const blobUrl = URL.createObjectURL(fetchedBlob);
+        // 6. Enable download
+        const blobUrl = URL.createObjectURL(zipBlob);
         downloadBtn.href = blobUrl;
-        downloadBtn.download = getFilenameFromUrl(url) || 'styles.css';
+        downloadBtn.download = 'jCss.zip';
+        downloadBtn.classList.remove('hidden');
+        progressDetail.textContent = 'Done! Click to download.';
+        setProgress(100, 100, downloadedBytes, 'Complete');
 
-        // Cleanup old object URL on next fetch
         downloadBtn.addEventListener('click', () => {
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
         }, { once: true });
 
       } catch (err) {
@@ -127,26 +210,19 @@
       }
     });
 
-    function setProgress(received, total, displayTotal) {
-      const percent = total ? Math.round((received / total) * 100) : 0;
-      progressPercent.textContent = `${percent}%`;
-      progressSize.textContent = `${formatBytes(received)} / ${formatBytes(displayTotal)}`;
-      progressBar.style.width = `${percent}%`;
+    function setProgress(value, max, absoluteBytes, detailText) {
+      const percent = max ? Math.round((value / max) * 100) : 0;
+      progressPercent.textContent = max ? `${percent}%` : '...';
+      progressSize.textContent = formatBytes(absoluteBytes);
+      progressBar.style.width = max ? `${percent}%` : '50%';
+      if (detailText) progressDetail.textContent = detailText;
     }
 
     function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
       if (bytes < 1024) return bytes + ' B';
       const kb = bytes / 1024;
       return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
-    }
-
-    function getFilenameFromUrl(url) {
-      try {
-        const path = new URL(url).pathname;
-        return path.substring(path.lastIndexOf('/') + 1) || 'styles.css';
-      } catch {
-        return 'styles.css';
-      }
     }
   </script>
 </body>
