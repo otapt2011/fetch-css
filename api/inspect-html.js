@@ -22,33 +22,25 @@ export default async function handler(req, res) {
     if (!headMatch) return '';
     let head = headMatch[1];
 
-    // Remove scripts
     head = head.replace(/<script\b[\s\S]*?<\/script>/gi, '');
-    // Remove unwanted <link> elements
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\balternate\b[^"']*["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*\bpreconnect\b[^"']*["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\brel\s*=\s*["'][^"']*dns[^"']*["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']script["'][^>]*\/?>/gi, '');
     head = head.replace(/<link\b[^>]*?\bas\s*=\s*["']image["'][^>]*\/?>/gi, '');
-    // Remove <base>
     head = head.replace(/<base\b[^>]*\/?>/gi, '');
 
-    // --- Preserve allowed meta tags ---
+    // Keep only charset and viewport meta tags
     const allowedMeta = [];
-    // Save <meta charset="...">
     const charsetMeta = head.match(/<meta\b[^>]*\bcharset\s*=\s*["'][^"']*["'][^>]*\/?>/gi);
     if (charsetMeta) allowedMeta.push(...charsetMeta);
-    // Save <meta name="viewport" ...>
     const viewportMeta = head.match(/<meta\b[^>]*\bname\s*=\s*["']viewport["'][^>]*\/?>/gi);
     if (viewportMeta) allowedMeta.push(...viewportMeta);
-    // Remove all meta tags
     head = head.replace(/<meta\b[^>]*\/?>/gi, '');
-    // Re‑insert allowed meta tags at the beginning of <head>
     if (allowedMeta.length > 0) {
       head = allowedMeta.join('\n') + '\n' + head;
     }
 
-    // Clean up empty lines
     head = head.replace(/^\s*[\r\n]/gm, '');
     return head.trim();
   }
@@ -58,11 +50,18 @@ export default async function handler(req, res) {
     return match ? `<${tag}${match[1]}>` : '';
   }
 
+  // Cleaned body: remove <script>, <meta>, and <ins> tags
   function cleanBody(html) {
     const bodyMatch = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
     if (!bodyMatch) return '';
     let bodyContent = bodyMatch[1];
+    // Remove scripts
     bodyContent = bodyContent.replace(/<script\b[\s\S]*?<\/script>/gi, '');
+    // Remove <meta> tags
+    bodyContent = bodyContent.replace(/<meta\b[^>]*\/?>/gi, '');
+    // Remove <ins> tags (both opening and closing, self-closing if any)
+    bodyContent = bodyContent.replace(/<ins\b[^>]*>[\s\S]*?<\/ins>/gi, '');
+    bodyContent = bodyContent.replace(/<ins\b[^>]*\/>/gi, '');
     return bodyContent.trim();
   }
 
@@ -83,8 +82,6 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(200).json(payload);
   } catch (e) {
-    // ... (the rest of the dynamic fallback remains identical)
-    // I'll include it for completeness but it's unchanged
     if (forceDynamic) {
       let browser = null;
       try {
