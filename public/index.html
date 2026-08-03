@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Web Scraper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Beautify (optional, kept for any future use) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.11/beautify-html.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.11/beautify-css.js"></script>
+  <!-- JSZip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="webScrapper.js"></script>
+  <style>
+    body { font-size: 14px; }
+    .progress-bar { transition: width 0.1s linear; }
+  </style>
+</head>
+<body class="bg-gray-100 h-full flex flex-col overflow-hidden">
+
+  <header class="bg-white shadow-sm px-3 py-2 flex items-center gap-2 flex-shrink-0">
+    <i class="fa-solid fa-globe text-blue-600 text-lg"></i>
+    <h1 class="text-base font-semibold text-gray-800">Web Scraper</h1>
+    <a href="cssScrapper.html" class="ml-auto text-xs text-blue-600 hover:text-blue-800 transition">
+      <i class="fa-solid fa-scroll mr-1"></i>CSS Scraper
+    </a>
+  </header>
+
+  <main class="flex-1 overflow-y-auto p-2 flex items-start justify-center">
+    <div class="w-full max-w-md space-y-2 mt-2">
+      <div class="space-y-1">
+        <label class="block text-xs text-gray-600">Page URL</label>
+        <div class="flex gap-1">
+          <input id="pageUrl" type="url" placeholder="https://example.com"
+                 class="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value="https://www.seaart.ai/ai-tools/image-upscaler">
+          <button id="scrapeBtn" class="px-4 py-1.5 bg-teal-600 text-white text-xs rounded hover:bg-teal-700 transition">
+            <i class="fa-solid fa-rocket mr-1"></i>Scrape
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress area -->
+      <div id="progressContainer" class="hidden space-y-1">
+        <div class="flex justify-between text-xs text-gray-500">
+          <span id="progressPercent">0%</span>
+          <span id="progressPhase">—</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div id="progressBar" class="progress-bar bg-teal-600 h-2 rounded-full" style="width: 0%"></div>
+        </div>
+        <p id="progressDetail" class="text-xs text-gray-500">Preparing...</p>
+      </div>
+
+      <p id="errorMsg" class="hidden text-xs text-red-600"></p>
+    </div>
+  </main>
+
+  <footer class="bg-white border-t px-3 py-1.5 flex-shrink-0 text-xs text-gray-500 text-center">
+    <i class="fa-regular fa-copyright"></i> Web Scraper Tool
+  </footer>
+
+  <script>
+    (function() {
+      const API_BASE = 'https://fetch-css.vercel.app/api/web-scrapper';
+
+      const pageUrlInput = document.getElementById('pageUrl');
+      const scrapeBtn = document.getElementById('scrapeBtn');
+      const progressContainer = document.getElementById('progressContainer');
+      const progressPercent = document.getElementById('progressPercent');
+      const progressPhase = document.getElementById('progressPhase');
+      const progressBar = document.getElementById('progressBar');
+      const progressDetail = document.getElementById('progressDetail');
+      const errorMsg = document.getElementById('errorMsg');
+
+      scrapeBtn.addEventListener('click', async () => {
+        const url = pageUrlInput.value.trim();
+        if (!url) {
+          errorMsg.textContent = 'Please enter a page URL.';
+          errorMsg.classList.remove('hidden');
+          return;
+        }
+
+        errorMsg.classList.add('hidden');
+        progressContainer.classList.remove('hidden');
+        progressPercent.textContent = '0%';
+        progressBar.style.width = '0%';
+        progressPhase.textContent = '—';
+        progressDetail.textContent = 'Starting...';
+
+        try {
+          const blob = await WebScraper.scrape(url, {
+            apiBase: API_BASE,
+            onProgress: (info) => {
+              const pct = Math.round(info.percent);
+              progressPercent.textContent = `${pct}%`;
+              progressBar.style.width = `${pct}%`;
+              progressPhase.textContent = info.phase || '';
+              progressDetail.textContent = info.detail || '';
+            }
+          });
+
+          // Auto download
+          const zipName = (() => {
+            try {
+              const host = new URL(url).hostname.replace(/^www\./, '');
+              return host.split('.')[0] + '.zip';
+            } catch { return 'page.zip'; }
+          })();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = zipName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+
+          progressDetail.innerHTML = '<i class="fa-solid fa-check"></i> Download started!';
+          progressPhase.textContent = 'done';
+          setTimeout(() => {
+            progressContainer.classList.add('hidden');
+          }, 3000);
+
+        } catch (err) {
+          errorMsg.textContent = err.message;
+          errorMsg.classList.remove('hidden');
+          progressContainer.classList.add('hidden');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
